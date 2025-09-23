@@ -90,9 +90,22 @@ QImage MotionDetector::matToQImage(const cv::Mat& bgr)
 
 bool MotionDetector::openBestCamera()
 {
-    auto tryOpen = [this](int idx) { return m_cap.open(idx, cv::CAP_V4L2) || m_cap.open(idx, cv::CAP_ANY); };
-    if (m_camIndex >= 0 && tryOpen(m_camIndex)) return true;
-    for (int i = 0; i < 10; ++i) if (tryOpen(i)) return true;
+    const std::string streamUrl = "http://10.10.16.63:8080/?action=stream";
+    qDebug() << "[MotionDetector] Opening network stream:" << QString::fromStdString(streamUrl);
+
+    // FFMPEG 백엔드가 네트워크 스트림에 더 안정적인 경우가 많음
+    if (m_cap.open(streamUrl, cv::CAP_FFMPEG)) {
+        qDebug() << "[MotionDetector] Stream opened successfully with FFMPEG backend.";
+        return true;
+    }
+
+    qDebug() << "[MotionDetector] Failed to open stream with FFMPEG backend, trying ANY backend...";
+    if (m_cap.open(streamUrl, cv::CAP_ANY)) {
+        qDebug() << "[MotionDetector] Stream opened successfully with ANY backend.";
+        return true;
+    }
+
+    qDebug() << "[MotionDetector] Failed to open stream with all backends.";
     return false;
 }
 

@@ -10,24 +10,24 @@ using namespace std::chrono;
 
 // ---- 파라미터 (필요시 조절) ----
 namespace {
-constexpr int   THRESH_BIN    = 150;      // 이진화 임계
-constexpr int   MIN_AREA      = 1200;     // 최소 면적
-constexpr int   ERODE_ITERS   = 0;
-constexpr int   DILATE_ITERS  = 2;
+// 이진화 및 윤곽선 검출
+constexpr int   THRESH_BIN      = 150;    // 이진화 임계
+constexpr int   MIN_AREA        = 1200;   // 최소 면적
 
 // 워밍업/무시 마스크
-constexpr int   WARMUP_MS     = 3000;     // 3초 워밍업
-constexpr int   IGN_DILATE_K  = 21;       // 누적 마스크 팽창 커널
-constexpr int   IGN_TRIM_K    = 15;       // 워밍업 종료 시 마스크 다듬기(침식)
+constexpr int   WARMUP_MS       = 3000;   // 3초 워밍업
+constexpr int   IGN_DILATE_K    = 21;     // 누적 마스크 팽창 커널
+constexpr int   IGN_TRIM_K      = 15;     // 워밍업 종료 시 마스크 다듬기(침식)
+
+// MOG2 학습률
+constexpr double LR_ARMED       = 0.002;  // 안정 상태 학습률
+constexpr double LR_WARMUP      = 0.01;   // 워밍업 시 학습률
 }
 
 MotionDetector::MotionDetector(int camIndex, QObject* parent)
     : QObject(parent), m_camIndex(camIndex)
 {
-    // 기본 저장 폴더
     m_outDir = QDir::homePath() + "/Videos/cctv";
-
-    // 워커 시작 시 루프 연결
     connect(&m_worker, &QThread::started, this, &MotionDetector::runLoop);
 }
 
@@ -51,22 +51,34 @@ void MotionDetector::setCameraIndex(int idx)
     m_camIndex = idx;
 }
 
+void MotionDetector::setClaheEnabled(bool enabled)
+{
+    m_useClahe = enabled;
+}
+
+void MotionDetector::setClaheParams(double clipLimit, int gridWidth, int gridHeight)
+{
+    if (clipLimit > 0) m_claheClipLimit = clipLimit;
+    if (gridWidth > 0 && gridHeight > 0) m_claheGridSize = cv::Size(gridWidth, gridHeight);
+}
+
+void MotionDetector::setMog2Params(int history, double varThreshold)
+{
+    if (history > 0) m_mog2History = history;
+    if (varThreshold > 0) m_mog2VarThreshold = varThreshold;
+}
+
 void MotionDetector::start()
 {
     if (m_running) return;
-
-    // parent가 있으면 moveToThread가 막힐 수 있음 → 가능하면 nullptr로 생성
     if (parent() != nullptr) {
         qWarning() << "[MotionDetector] WARNING: parent is set. moveToThread may fail.";
     }
-
-    // 객체 자체를 워커 스레드로 이동
     bool moved = (this->thread() == &m_worker) || this->moveToThread(&m_worker);
     if (!moved) {
         emit errorOccured(QStringLiteral("Failed to move detector to worker thread."));
         return;
     }
-
     m_running = true;
     m_worker.start();
 }
@@ -74,12 +86,10 @@ void MotionDetector::start()
 void MotionDetector::stop()
 {
     m_running = false;
-
     if (m_worker.isRunning()) {
         m_worker.quit();
         m_worker.wait();
     }
-
     stopRecording();
     if (m_cap.isOpened()) m_cap.release();
 }
@@ -105,7 +115,6 @@ bool MotionDetector::openBestCamera()
         return false;
     };
 
-    // 1) 지정 인덱스(/dev/videoX 존재 시 경로 우선)
     if (m_camIndex >= 0) {
         QString prefer = QString("/dev/video%1").arg(m_camIndex);
         if (QFileInfo::exists(prefer)) {
@@ -114,13 +123,11 @@ bool MotionDetector::openBestCamera()
         if (tryOpenByIndex(m_camIndex)) return true;
     }
 
-    // 2) /dev/video[0..9] 경로 탐색
     for (int i=0; i<10; ++i) {
         QString dev = QString("/dev/video%1").arg(i);
         if (!QFileInfo::exists(dev)) continue;
         if (tryOpenByPath(dev.toStdString())) return true;
     }
-    // 3) 인덱스 폴백
     for (int i=0; i<10; ++i) {
         if (tryOpenByIndex(i)) return true;
     }
@@ -130,8 +137,7 @@ bool MotionDetector::openBestCamera()
 void MotionDetector::startRecording()
 {
     if (m_recording) return;
-    qDebug() << "[MotionDetector] startRecording() called (armed=" << m_armed
-             << ", camReady=" << m_cameraReady << ")";
+    qDebug() << "[MotionDetector] startRecording() called";
 
     QDir().mkpath(m_outDir);
     const QString ts   = QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss");
@@ -140,9 +146,9 @@ void MotionDetector::startRecording()
     if (m_fps < 1.0) m_fps = 30.0;
     if (m_frameSize.width <= 0 || m_frameSize.height <= 0) m_frameSize = cv::Size(1280, 720);
 
-    int fourcc = cv::VideoWriter::fourcc('m','p','4','v'); // mp4
+    int fourcc = cv::VideoWriter::fourcc('m','p','4','v');
     m_writer.release();
-    if (!m_writer.open(path.toStdString(), fourcc, m_fps, m_frameSize, /*isColor*/true)) {
+    if (!m_writer.open(path.toStdString(), fourcc, m_fps, m_frameSize, true)) {
         emit errorOccured(QStringLiteral("VideoWriter open failed: %1").arg(path));
         return;
     }
@@ -167,21 +173,24 @@ void MotionDetector::runLoop()
         return;
     }
 
-    auto mog2 = cv::createBackgroundSubtractorMOG2(500, 16.0, true);
+    auto mog2 = cv::createBackgroundSubtractorMOG2(m_mog2History, m_mog2VarThreshold, true);
+
+    cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE();
+    clahe->setClipLimit(m_claheClipLimit);
+    clahe->setTilesGridSize(m_claheGridSize);
 
     m_armed = false;
     m_cameraReady = false;
+    m_motionInProgress = false;
     m_tStart = steady_clock::now();
     m_ignoreMask.release();
 
     cv::Mat frame, fg;
-
-    // 첫 프레임 읽기
     if (m_cap.read(frame) && !frame.empty()) {
         m_cameraReady = true;
-        // ★★★ 변경: invokeMethod 대신 즉시 신호 발행
-        QImage q0 = matToQImage(frame);
-        emit frameReady(q0);
+        m_fps = m_cap.get(cv::CAP_PROP_FPS);
+        m_frameSize = frame.size();
+        emit frameReady(matToQImage(frame));
     } else {
         emit errorOccured(QStringLiteral("Camera opened but first frame read failed."));
         m_running = false;
@@ -193,7 +202,17 @@ void MotionDetector::runLoop()
     while (m_running) {
         if (!m_cap.read(frame) || frame.empty()) continue;
 
-        double lr = m_armed ? 0.002 : 0.01;
+        if (m_useClahe) {
+            cv::Mat lab_image;
+            cv::cvtColor(frame, lab_image, cv::COLOR_BGR2Lab);
+            std::vector<cv::Mat> lab_planes(3);
+            cv::split(lab_image, lab_planes);
+            clahe->apply(lab_planes[0], lab_planes[0]);
+            cv::merge(lab_planes, lab_image);
+            cv::cvtColor(lab_image, frame, cv::COLOR_Lab2BGR);
+        }
+
+        double lr = m_armed ? LR_ARMED : LR_WARMUP;
         mog2->apply(frame, fg, lr);
 
         cv::threshold(fg, fg, THRESH_BIN, 255, cv::THRESH_BINARY);
@@ -206,15 +225,13 @@ void MotionDetector::runLoop()
 
             if (duration_cast<milliseconds>(steady_clock::now() - m_tStart).count() >= WARMUP_MS) {
                 cv::erode(m_ignoreMask, m_ignoreMask,
-                          cv::getStructuringElement(cv::MORPH_ELLIPSE, {IGN_TRIM_K, IGN_TRIM_K}),
-                          {-1,-1}, 1);
+                          cv::getStructuringElement(cv::MORPH_ELLIPSE, {IGN_TRIM_K, IGN_TRIM_K}));
                 m_armed = true;
                 qDebug() << "[MotionDetector] armed. ignoreMask fixed.";
             }
         } else {
             if (!m_ignoreMask.empty()) {
-                cv::Mat inv; cv::bitwise_not(m_ignoreMask, inv);
-                cv::bitwise_and(fg, inv, fg);
+                cv::bitwise_and(fg, m_ignoreMask, fg, cv::noArray());
             }
         }
 
@@ -223,14 +240,22 @@ void MotionDetector::runLoop()
             std::vector<std::vector<cv::Point>> contours;
             cv::findContours(fg, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
             for (auto& c : contours) {
-                if (cv::contourArea(c) > MIN_AREA) { detectedNow = true; break; }
+                if (cv::contourArea(c) > MIN_AREA) {
+                    detectedNow = true;
+                    break;
+                }
             }
         }
 
-        // ★★★ 변경: invokeMethod 대신 즉시 신호 발행
-        if (m_cameraReady && m_armed && detectedNow) {
+        // 팝업 중복 방지 로직
+        if (detectedNow && !m_motionInProgress) {
+            m_motionInProgress = true;
             emit detected();
-            if (!m_recording) startRecording();
+            if (!m_recording) {
+                startRecording();
+            }
+        } else if (!detectedNow && m_motionInProgress) {
+            m_motionInProgress = false;
         }
 
         if (m_recording) {
@@ -245,9 +270,7 @@ void MotionDetector::runLoop()
             }
         }
 
-        // ★★★ 변경: invokeMethod 대신 즉시 신호 발행
-        QImage qimg = matToQImage(frame);
-        emit frameReady(qimg);
+        emit frameReady(matToQImage(frame));
     }
 
     stopRecording();

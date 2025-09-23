@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Live Camera Stream</title>
+</head>
+<body>
+    <h1>실시간 카메라</h1>
+    <img id="live" src="" alt="Live Stream" width="1280" height="720">
+
+    <script>
+        const img = document.getElementById('live');
+        const ws = new WebSocket('ws://10.10.16.44:8080'); // Qt 서버의 IP 주소와 포트
+
+        ws.onopen = () => {
+            console.log('Connected to stream server.');
+        };
+
+        ws.onmessage = (event) => {
+            // 수신한 바이너리(JPEG) 데이터를 Base64로 변환하여 이미지 소스로 사용
+            const blob = new Blob([event.data], { type: 'image/jpeg' });
+            img.src = URL.createObjectURL(blob);
+        };
+
+        ws.onclose = () => {
+            console.log('Disconnected from stream server.');
+        };
+
+        ws.onerror = (error) => {
+            console.error('WebSocket Error:', error);
+        };
+    </script>
+</body>
+</html>

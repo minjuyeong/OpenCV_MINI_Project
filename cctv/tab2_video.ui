@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>Tab2_video</class>
+ <widget class="QWidget" name="Tab2_video">
+  <property name="geometry">
+   <rect>
+    <x>0</x><y>0</y><width>960</width><height>640</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>영상</string>
+  </property>
+  <layout class="QVBoxLayout" name="rootLayout">
+   <!-- 상단 제목 라인 -->
+   <item>
+    <widget class="QWidget" name="topBar">
+     <layout class="QHBoxLayout" name="topBarLayout">
+      <item>
+       <widget class="QLabel" name="title">
+        <property name="text">
+         <string>영상 갤러리</string>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">font-weight:600;</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <spacer name="spacerTop">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size><width>40</width><height>20</height></size>
+        </property>
+       </spacer>
+      </item>
+     </layout>
+    </widget>
+   </item>
+
+   <!-- 중앙 스택: 갤러리 / 플레이어 -->
+   <item>
+    <widget class="QStackedWidget" name="stack">
+     <property name="currentIndex">
+      <number>0</number>
+     </property>
+
+     <!-- 0: 갤러리 -->
+     <widget class="QWidget" name="galleryPage">
+      <layout class="QVBoxLayout" name="galleryLayout">
+       <item>
+        <widget class="QWidget" name="galleryCtrl">
+         <layout class="QHBoxLayout" name="galleryCtrlLayout">
+          <item>
+           <widget class="QPushButton" name="btnRefresh">
+            <property name="text">
+             <string>새로고침</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="btnPlay">
+            <property name="text">
+             <string>재생</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="spacerGallery">
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size><width>40</width><height>20</height></size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QListWidget" name="list">
+         <property name="viewMode">
+          <enum>QListView::IconMode</enum>
+         </property>
+         <property name="movement">
+          <enum>QListView::Static</enum>
+         </property>
+         <property name="resizeMode">
+          <enum>QListView::Adjust</enum>
+         </property>
+         <property name="iconSize">
+          <size><width>240</width><height>135</height></size>
+         </property>
+         <property name="gridSize">
+          <size><width>260</width><height>180</height></size>
+         </property>
+         <property name="spacing">
+          <number>8</number>
+         </property>
+         <property name="uniformItemSizes">
+          <bool>false</bool>
+         </property>
+         <property name="wordWrap">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+
+     <!-- 1: 플레이어 -->
+     <widget class="QWidget" name="playerPage">
+      <layout class="QVBoxLayout" name="playerLayout">
+       <item>
+        <widget class="QWidget" name="playerCtrl">
+         <layout class="QHBoxLayout" name="playerCtrlLayout">
+          <item>
+           <widget class="QPushButton" name="btnBack">
+            <property name="text">
+             <string>← 갤러리</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="nowPlaying">
+            <property name="text">
+             <string/>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">color:#555;</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <!-- QVideoWidget은 코드에서 videoHost 내부에 동적으로 붙임 -->
+        <widget class="QWidget" name="videoHost">
+         <property name="minimumSize">
+          <size><width>640</width><height>360</height></size>
+         </property>
+         <layout class="QVBoxLayout" name="videoHostLayout"/>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

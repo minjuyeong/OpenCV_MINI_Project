@@ -2,15 +2,9 @@
 #define TAB1_CAMERA_H
 
 #include <QWidget>
-#include <QLabel>
-#include <QMessageBox>
-#include <QPointer>
 #include <QImage>
 
-class QPushButton;
-class QVBoxLayout;
-
-#include "motiondetector.h"
+class MotionDetector;  // 전방 선언 (헤더 경량화)
 
 namespace Ui { class Tab1_camera; }
 
@@ -21,36 +15,28 @@ public:
     explicit Tab1_camera(QWidget *parent = nullptr);
     ~Tab1_camera();
 
+    // ★ MainWidget에서 쓰는 getter 복구
     MotionDetector* detector() const { return m_detector; }
 
-private slots:
-    void onToggleDisplay();                // 버튼 클릭 → 화면 표시 on/off
-    void onFrameReady(const QImage& img, double clipLimit);  // 카메라 프레임 수신
-    //void onOriginalFrameReady(const QImage& img); // [추가] 원본 수신 슬롯
-    void onDetected();                     // 감지 팝업
-    void onDetectionCleared(); // [추가] 위험 해제 슬롯
+    // (원래 쓰던 슬롯 시그니처 유지)
+public slots:
+    void onFrameReady(const QImage& img, double clipLimit = 0.0);
+    void onDetected();
 
-protected:
-    void resizeEvent(QResizeEvent *e) override;
+private slots:
+    void on_pPBCam_clicked();   // 네 UI 버튼(objectName: pPBCam) 토글
 
 private:
-    void ensureCamLabel();                 // pCam 안에 라벨 세팅
-    void setDisplayEnabled(bool enable);   // 표시 on/off 토글
-    void showPopup();                      // 팝업(3초 자동 닫힘)
-    void closePopup(); // [추가] 팝업 닫기 함수
+    void updateView();
 
 private:
     Ui::Tab1_camera *ui = nullptr;
 
-    QLabel *m_camLabel = nullptr;          // 영상 표시 라벨
-    QLabel *m_badge    = nullptr;          // 우상단 "감지" 배지(보조)
-    bool    m_showing  = false;            // 표시 on/off 상태
+    // ★ 원래 구조대로 Tab1이 Detector를 “소유”
+    MotionDetector *m_detector = nullptr;
 
-    QPointer<QMessageBox> m_alertBox;      // 팝업 핸들
-    MotionDetector *m_detector = nullptr;  // 백그라운드 감지/녹화
-    QImage m_lastFrame;                    // 마지막 프레임(즉시 표시용)
-
-    bool m_isAlertActive = false; // [추가] 현재 경보 상태 변수
+    QImage m_lastFrame;
+    bool   m_displayOn = true;
 };
 
 #endif // TAB1_CAMERA_H

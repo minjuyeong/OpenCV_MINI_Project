@@ -8,35 +8,32 @@
 #include <atomic>
 #include <opencv2/opencv.hpp>
 #include <chrono>
-#include <QFuture>
 
 class MotionDetector : public QObject
 {
     Q_OBJECT
 public:
-    explicit MotionDetector(int camIndex = 0, QObject* parent = nullptr);
+    explicit MotionDetector(int camIndex = -1, QObject* parent = nullptr);
     ~MotionDetector();
 
     // 설정
     void setOutputDirectory(const QString& dir);   // 기본: ~/Videos/cctv
-    void setRecordingSeconds(int sec);             // 기본: 8초, 이제 최소 녹화 시간으로 사용됨
-    void setCameraIndex(int idx);
+    void setRecordingSeconds(int sec);             // 기본: 8초(최소 녹화 시간)
+    void setCameraIndex(int idx);                  // URL 미설정 시에만 의미 있음
+    void setCameraUrl(const QString& url) { m_camUrl = url; } // ★ HTTP/RTSP 등 URL 입력
 
-    // 영상 처리 옵션 설정 함수
+    // 영상 처리 옵션
     void setClaheEnabled(bool enabled);
     void setClaheParams(double clipLimit, int gridWidth, int gridHeight);
     void setMog2Params(int history, double varThreshold);
 
     void setAutoClaheEnabled(bool enabled);
-    void setAutoClaheParams(int darknessThreshold, double maxClip); // 파라미터 변경
+    void setAutoClaheParams(int darknessThreshold, double maxClip);
 
-
-	
 signals:
-    void frameReady(const QImage& img, double clipLimit);  // UI 표시용
-    //void originalFrameReady(const QImage& origImg); // [추가] 원본 영상 신호
-    void detected();                     // 감지 신호(팝업 등)
-    void detectionCleared(); // [추가] 위험 해제 신호
+    void frameReady(const QImage& img, double clipLimit);
+    void detected();
+    void detectionCleared();
     void errorOccured(const QString& msg);
 
 public slots:
@@ -46,19 +43,21 @@ public slots:
 private:
     void runLoop();
 
-    // 카메라 열기 (V4L2 우선 + /dev/video* 자동 탐색)
+    // 카메라 열기 (URL만 사용, 실패 시 false 반환 — 내부캠 폴백 없음)
     bool openBestCamera();
 
     // 녹화 제어
     void startRecording();
     void stopRecording();
+
     static QImage matToQImage(const cv::Mat& bgr);
 
 private:
     // 구성/상태
-    int                  m_camIndex = 0;
+    int                  m_camIndex = -1;
+    QString              m_camUrl;              // ★ 입력 소스 URL(비어있지 않아야 함)
     QString              m_outDir;              // 저장 폴더
-    int                  m_recSeconds = 8;      //최소 녹화 시간
+    int                  m_recSeconds = 8;      // 최소 녹화 시간(초)
 
     // 스레드/루프
     QThread              m_worker;
@@ -74,26 +73,27 @@ private:
     // 상태 변수
     bool m_cameraReady = false;
     bool m_armed = false;
+
     // 워밍업/무시 마스크
     std::chrono::steady_clock::time_point m_tStart;
-	std::chrono::steady_clock::time_point m_recStarted;
-    cv::Mat                               m_ignoreMask; // 초기 장면 누적 마스크
-	bool m_motionInProgress = false; // 현재 움직임이 진행 중인지 상태를 저장
-    std::chrono::steady_clock::time_point m_lastDetectTime; // [추가] 마지막 감지 시간
-    // private:
-    int                  m_missCount = 0; //위험감지 팝업 노이즈 필터
+    std::chrono::steady_clock::time_point m_recStarted;
+    cv::Mat                               m_ignoreMask;
+
+    bool m_motionInProgress = false;
+    std::chrono::steady_clock::time_point m_lastDetectTime;
+    int  m_missCount = 0;
 
     // 영상 처리 파라미터
-    bool m_useClahe = false;
-    bool m_autoClahe = false;        // 자동 CLAHE 모드 플래그
-    int  m_darknessThreshold = 80;   // "어둡다"고 판단할 밝기 상한선 (0~255)
-    double m_claheMaxClip = 8.0;     // 어두울 때 적용할 최대 필터 강도
+    bool   m_useClahe = false;
+    bool   m_autoClahe = false;
+    int    m_darknessThreshold = 80;
+    double m_claheMaxClip = 8.0;
 
-    double m_claheClipLimit = 2.0;
-    cv::Size m_claheGridSize = cv::Size(8, 8);
+    double   m_claheClipLimit = 2.0;
+    cv::Size m_claheGridSize  = cv::Size(8, 8);
 
-    int m_mog2History = 500;
-    double m_mog2VarThreshold = 16.0;
+    int     m_mog2History     = 500;
+    double  m_mog2VarThreshold= 16.0;
 };
 
 #endif // MOTIONDETECTOR_H

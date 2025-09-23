@@ -19,46 +19,22 @@
   <property name="windowTitle">
    <string>Form</string>
   </property>
-  <widget class="QWidget" name="verticalLayoutWidget">
-   <property name="geometry">
-    <rect>
-     <x>10</x>
-     <y>10</y>
-     <width>531</width>
-     <height>491</height>
-    </rect>
-   </property>
-   <layout class="QVBoxLayout" name="verticalLayout" stretch="9,1">
-    <property name="sizeConstraint">
-     <enum>QLayout::SizeConstraint::SetDefaultConstraint</enum>
-    </property>
-    <item>
-     <widget class="QLabel" name="pCam">
-      <property name="text">
-       <string/>
-      </property>
-     </widget>
-    </item>
-    <item>
-     <layout class="QHBoxLayout" name="horizontalLayout" stretch="8,2">
-      <item>
-       <widget class="QPushButton" name="pPBCam">
-        <property name="text">
-         <string> 카메라 켜기</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QLabel" name="filterStatusLabel">
-        <property name="text">
-         <string>필터 강도</string>
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </item>
-   </layout>
-  </widget>
+  <layout class="QVBoxLayout" name="verticalLayout" stretch="9,1">
+   <item>
+    <widget class="QLabel" name="pCam">
+     <property name="text">
+      <string/>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPushButton" name="pPBCam">
+     <property name="text">
+      <string> 카메라 켜기</string>
+     </property>
+    </widget>
+   </item>
+  </layout>
  </widget>
  <resources/>
  <connections/>

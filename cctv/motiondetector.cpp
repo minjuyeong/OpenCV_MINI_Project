@@ -3,37 +3,29 @@
 #include <QDir>
 #include <QDateTime>
 #include <QDebug>
-#include <QMetaObject>
 #include <QFileInfo>
 
 using namespace std::chrono;
 
-// ---- 파라미터 (필요시 조절) ----
 namespace {
-constexpr int   THRESH_BIN    = 150;      // 이진화 임계
-constexpr int   MIN_AREA      = 1200;     // 최소 면적
+constexpr int   THRESH_BIN    = 150;
+constexpr int   MIN_AREA      = 1200;
 constexpr int   ERODE_ITERS   = 0;
 constexpr int   DILATE_ITERS  = 2;
 
-// 워밍업/무시 마스크
-constexpr int   WARMUP_MS     = 3000;     // 3초 워밍업
-constexpr int   IGN_DILATE_K  = 21;       // 누적 마스크 팽창 커널
-constexpr int   IGN_TRIM_K    = 15;       // 워밍업 종료 시 마스크 다듬기(침식)
+constexpr int   WARMUP_MS     = 3000;
+constexpr int   IGN_DILATE_K  = 21;
+constexpr int   IGN_TRIM_K    = 15;
 
-// [추가] 감지가 사라진 후 몇 초 더 녹화할지 결정
-constexpr int   REC_GRACE_PERIOD_S = 5; // 5초
+constexpr int   REC_GRACE_PERIOD_S = 5;
 }
-// MOG2 학습률
-constexpr double LR_ARMED       = 0.002;  // 안정 상태 학습률
-constexpr double LR_WARMUP      = 0.01;   // 워밍업 시 학습률
+constexpr double LR_ARMED  = 0.002;
+constexpr double LR_WARMUP = 0.01;
 
 MotionDetector::MotionDetector(int camIndex, QObject* parent)
     : QObject(parent), m_camIndex(camIndex)
 {
-    // 기본 저장 폴더
     m_outDir = QDir::homePath() + "/Videos/cctv";
-
-    // 워커 시작 시 루프 연결
     connect(&m_worker, &QThread::started, this, &MotionDetector::runLoop);
 }
 
@@ -42,32 +34,16 @@ MotionDetector::~MotionDetector()
     stop();
 }
 
-void MotionDetector::setOutputDirectory(const QString& dir)
-{
-    m_outDir = dir;
-}
-
-void MotionDetector::setRecordingSeconds(int sec)
-{
-    if (sec > 0) m_recSeconds = sec;
-}
-
-void MotionDetector::setCameraIndex(int idx)
-{
-    m_camIndex = idx;
-}
-
-void MotionDetector::setClaheEnabled(bool enabled)
-{
-    m_useClahe = enabled;
-}
+void MotionDetector::setOutputDirectory(const QString& dir) { m_outDir = dir; }
+void MotionDetector::setRecordingSeconds(int sec) { if (sec > 0) m_recSeconds = sec; }
+void MotionDetector::setCameraIndex(int idx) { m_camIndex = idx; }
+void MotionDetector::setClaheEnabled(bool enabled) { m_useClahe = enabled; }
 
 void MotionDetector::setClaheParams(double clipLimit, int gridWidth, int gridHeight)
 {
     if (clipLimit > 0) m_claheClipLimit = clipLimit;
     if (gridWidth > 0 && gridHeight > 0) m_claheGridSize = cv::Size(gridWidth, gridHeight);
 }
-
 void MotionDetector::setMog2Params(int history, double varThreshold)
 {
     if (history > 0) m_mog2History = history;
@@ -77,19 +53,14 @@ void MotionDetector::setMog2Params(int history, double varThreshold)
 void MotionDetector::start()
 {
     if (m_running) return;
-
-    // parent가 있으면 moveToThread가 막힐 수 있음 → 가능하면 nullptr로 생성
     if (parent() != nullptr) {
         qWarning() << "[MotionDetector] WARNING: parent is set. moveToThread may fail.";
     }
-
-    // 객체 자체를 워커 스레드로 이동
     bool moved = (this->thread() == &m_worker) || this->moveToThread(&m_worker);
     if (!moved) {
         emit errorOccured(QStringLiteral("Failed to move detector to worker thread."));
         return;
     }
-
     m_running = true;
     m_worker.start();
 }
@@ -97,12 +68,10 @@ void MotionDetector::start()
 void MotionDetector::stop()
 {
     m_running = false;
-
     if (m_worker.isRunning()) {
         m_worker.quit();
         m_worker.wait();
     }
-
     stopRecording();
     if (m_cap.isOpened()) m_cap.release();
 }
@@ -117,61 +86,44 @@ QImage MotionDetector::matToQImage(const cv::Mat& bgr)
 
 bool MotionDetector::openBestCamera()
 {
-    auto tryOpenByIndex = [this](int idx)->bool {
-        if (m_cap.open(idx, cv::CAP_V4L2)) return true;
-        if (m_cap.open(idx, cv::CAP_ANY))  return true;
+    // 내부캠 폴백 없이 URL만 사용
+    if (m_camUrl.isEmpty()) {
+        qWarning() << "[MotionDetector] m_camUrl is empty. Set CameraUrl first.";
         return false;
-    };
+    }
+
     auto tryOpenByPath = [this](const std::string& path)->bool {
-        if (m_cap.open(path, cv::CAP_V4L2)) return true;
-        if (m_cap.open(path, cv::CAP_ANY))  return true;
+        // FFmpeg 우선(HTTP/RTSP/MJPEG/파일 경로)
+        if (m_cap.open(path, cv::CAP_FFMPEG)) return true;
+        if (m_cap.open(path, cv::CAP_ANY))    return true;
         return false;
     };
 
-    // 1) 지정 인덱스(/dev/videoX 존재 시 경로 우선)
-    if (m_camIndex >= 0) {
-        QString prefer = QString("/dev/video%1").arg(m_camIndex);
-        if (QFileInfo::exists(prefer)) {
-            if (tryOpenByPath(prefer.toStdString())) return true;
-        }
-        if (tryOpenByIndex(m_camIndex)) return true;
-    }
-
-    // 2) /dev/video[0..9] 경로 탐색
-    for (int i=0; i<10; ++i) {
-        QString dev = QString("/dev/video%1").arg(i);
-        if (!QFileInfo::exists(dev)) continue;
-        if (tryOpenByPath(dev.toStdString())) return true;
-    }
-    // 3) 인덱스 폴백
-    for (int i=0; i<10; ++i) {
-        if (tryOpenByIndex(i)) return true;
-    }
-    return false;
+    qDebug() << "[MotionDetector] Trying URL:" << m_camUrl;
+    return tryOpenByPath(m_camUrl.toStdString());
 }
 
 void MotionDetector::startRecording()
 {
     if (m_recording) return;
-    qDebug() << "[MotionDetector] startRecording() called (armed=" << m_armed
-             << ", camReady=" << m_cameraReady << ")";
 
     QDir().mkpath(m_outDir);
     const QString ts   = QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss");
     const QString path = m_outDir + QString("/detect_%1.mp4").arg(ts);
 
-    if (m_fps < 1.0) m_fps = 30.0;
+    if (m_fps < 1.0 || !std::isfinite(m_fps)) m_fps = 30.0;
     if (m_frameSize.width <= 0 || m_frameSize.height <= 0) m_frameSize = cv::Size(1280, 720);
 
     int fourcc = cv::VideoWriter::fourcc('m','p','4','v'); // mp4
     m_writer.release();
-    if (!m_writer.open(path.toStdString(), fourcc, m_fps, m_frameSize, /*isColor*/true)) {
+    if (!m_writer.open(path.toStdString(), fourcc, m_fps, m_frameSize, true)) {
         emit errorOccured(QStringLiteral("VideoWriter open failed: %1").arg(path));
         return;
     }
-    m_recording = true;
+    m_recording  = true;
     m_recStarted = steady_clock::now();
-    qDebug() << "[MotionDetector] Recording started:" << path;
+    qDebug() << "[MotionDetector] Recording started:" << path
+             << "fps=" << m_fps << "size=" << m_frameSize.width << "x" << m_frameSize.height;
 }
 
 void MotionDetector::stopRecording()
@@ -206,9 +158,12 @@ void MotionDetector::runLoop()
     // 첫 프레임 읽기
     if (m_cap.read(frame) && !frame.empty()) {
         m_cameraReady = true;
-        // ★★★ 변경: invokeMethod 대신 즉시 신호 발행
-        QImage q0 = matToQImage(frame);
-        emit frameReady(q0, 0.0);
+
+        double fpsProbe = m_cap.get(cv::CAP_PROP_FPS);
+        if (fpsProbe > 0.0 && std::isfinite(fpsProbe)) m_fps = fpsProbe;
+        m_frameSize = frame.size();
+
+        emit frameReady(matToQImage(frame), 0.0);
     } else {
         emit errorOccured(QStringLiteral("Camera opened but first frame read failed."));
         m_running = false;
@@ -217,28 +172,20 @@ void MotionDetector::runLoop()
         return;
     }
 
-    bool wasDetectingLastFrame = false; // [추가] 이전 프레임 감지 상태
+    bool wasDetectingLastFrame = false;
 
     while (m_running) {
         cv::Mat frame;
         if (!m_cap.read(frame) || frame.empty()) continue;
 
-        //cv::Mat vis;
-        //frame.copyTo(vis);
-        // [추가] 원본 프레임을 먼저 QImage로 변환하고 신호를 보냄
-        //QImage qOrigImg = matToQImage(frame);
-        //emit originalFrameReady(qOrigImg);
-
-        // --- 자동 밝기 감지 (원본 frame 사용) ---
-        bool applyClaheThisFrame = m_useClahe;
-        double currentClipLimit = m_claheClipLimit;
+        // --- 자동 밝기 감지 ---
+        bool   applyClaheThisFrame = m_useClahe;
+        double currentClipLimit    = m_claheClipLimit;
 
         if (m_autoClahe && !applyClaheThisFrame) {
             cv::Mat gray;
-            cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY); // 원본으로 밝기 계산
-            cv::Scalar meanBrightness = cv::mean(gray);
-            double brightness = meanBrightness[0];
-
+            cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
+            double brightness = cv::mean(gray)[0];
             if (brightness < m_darknessThreshold) {
                 applyClaheThisFrame = true;
                 currentClipLimit = m_claheMaxClip - (m_claheMaxClip - 1.0) * (brightness / m_darknessThreshold);
@@ -247,8 +194,8 @@ void MotionDetector::runLoop()
             }
         }
 
-        // --- 영상 처리 (결과는 processedFrame에 저장) ---
-        cv::Mat processedFrame; // 2. 작업용 이미지를 담을 변수
+        // --- 영상 처리 ---
+        cv::Mat processedFrame;
         if (applyClaheThisFrame) {
             cv::Mat lab_image;
             cv::cvtColor(frame, lab_image, cv::COLOR_BGR2Lab);
@@ -258,12 +205,12 @@ void MotionDetector::runLoop()
             cv::merge(lab_planes, lab_image);
             cv::cvtColor(lab_image, processedFrame, cv::COLOR_Lab2BGR);
         } else {
-            frame.copyTo(processedFrame); // 필터를 적용하지 않으면 원본을 그대로 복사
+            frame.copyTo(processedFrame);
         }
 
+        // --- 모션 감지 ---
         double lr = m_armed ? LR_ARMED : LR_WARMUP;
         mog2->apply(frame, fg, lr);
-
         cv::threshold(fg, fg, THRESH_BIN, 255, cv::THRESH_BINARY);
 
         if (!m_armed) {
@@ -290,92 +237,55 @@ void MotionDetector::runLoop()
             std::vector<std::vector<cv::Point>> contours;
             cv::findContours(fg, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
             for (auto& c : contours) {
-                if (cv::contourArea(c) > MIN_AREA) {
-                    detectedNow = true;
-                    break;
-                }
+                if (cv::contourArea(c) > MIN_AREA) { detectedNow = true; break; }
             }
         }
 
-        // // ★★★ 변경: invokeMethod 대신 즉시 신호 발행
-        // if (m_cameraReady && m_armed && detectedNow) {
-        //     emit detected();
-        //     if (!m_recording) startRecording();
-        // }
-
-        // if (m_recording) {
-        //     if (frame.size() != m_frameSize) {
-        //         cv::Mat resized; cv::resize(frame, resized, m_frameSize);
-        //         m_writer.write(resized);
-        //     } else {
-        //         m_writer.write(frame);
-        //     }
-        //     if (duration_cast<seconds>(steady_clock::now() - m_recStarted).count() >= m_recSeconds) {
-        //         stopRecording();
-        //     }
-        // }
-
-        // [수정 1] 감지 상태에 따른 신호 및 녹화 제어
+        // 감지/녹화 제어
         if (m_cameraReady && m_armed) {
             if (detectedNow) {
-                m_missCount = 0; // 움직임이 있으니 미감지 카운터 초기화
-                if (!wasDetectingLastFrame) { // 이전에 감지 안되다가 지금 처음 감지된 경우
-                    emit detected();
-                }
+                m_missCount = 0;
+                if (!wasDetectingLastFrame) emit detected();
                 if (!m_recording) startRecording();
                 m_lastDetectTime = steady_clock::now();
                 wasDetectingLastFrame = true;
-            } else { // 현재 프레임에 움직임이 없는 경우
-                m_missCount++; // 미감지 카운터 증가
-                // 8 프레임 이상 연속으로 움직임이 없었고, 이전에 감지 중이었을 때만
+            } else {
+                m_missCount++;
                 if (m_missCount >= 8 && wasDetectingLastFrame) {
-                    emit detectionCleared(); // 위험 해제 신호 발생
+                    emit detectionCleared();
                     wasDetectingLastFrame = false;
-                    m_missCount = 0; // 카운터 초기화
+                    m_missCount = 0;
                 }
             }
         } else if (!detectedNow && m_motionInProgress) {
             m_motionInProgress = false;
         }
 
-        // [수정 2] 지속형 녹화 로직
+        // 녹화 중이면 처리된 프레임 저장
         if (m_recording) {
-
-            // 마지막 감지 후 N초가 지났고, 최소 녹화 시간도 지났으면 녹화 중지
-            auto now = steady_clock::now();
-            bool gracePeriodPassed = duration_cast<seconds>(now - m_lastDetectTime).count() >= REC_GRACE_PERIOD_S;
-            bool minRecTimePassed = duration_cast<seconds>(now - m_recStarted).count() >= m_recSeconds;
-
-            if (gracePeriodPassed && minRecTimePassed) {
-                stopRecording();
+            if (processedFrame.size() != m_frameSize) {
+                cv::Mat resized; cv::resize(processedFrame, resized, m_frameSize);
+                m_writer.write(resized);
+            } else {
+                m_writer.write(processedFrame);
             }
+            auto now = steady_clock::now();
+            bool gracePassed = duration_cast<seconds>(now - m_lastDetectTime).count() >= REC_GRACE_PERIOD_S;
+            bool minPassed   = duration_cast<seconds>(now - m_recStarted).count() >= m_recSeconds;
+            if (gracePassed && minPassed) stopRecording();
         }
-        cv::Mat vis;
-        processedFrame.copyTo(vis);
 
-        // ★★★ 변경: invokeMethod 대신 즉시 신호 발행
-        QImage qProcessedImg = matToQImage(vis); // vis 변수 사용 (박스가 그려진 최종본)
-        // [수정] 계산된 clipLimit 값을 신호에 담아 보냄
-        emit frameReady(qProcessedImg, applyClaheThisFrame ? currentClipLimit : 0.0);
+        emit frameReady(matToQImage(processedFrame), applyClaheThisFrame ? currentClipLimit : 0.0);
     }
 
     stopRecording();
     if (m_cap.isOpened()) m_cap.release();
 }
-void MotionDetector::setAutoClaheEnabled(bool enabled)
-{
-    m_autoClahe = enabled;
-}
 
-// [수정] 자동 모드 파라미터를 설정하는 함수
+void MotionDetector::setAutoClaheEnabled(bool enabled) { m_autoClahe = enabled; }
+
 void MotionDetector::setAutoClaheParams(int darknessThreshold, double maxClip)
 {
-    if (darknessThreshold > 0 && darknessThreshold <= 255) {
-        m_darknessThreshold = darknessThreshold;
-    }
-    if (maxClip > 0) {
-        m_claheMaxClip = maxClip;
-    }
+    if (darknessThreshold > 0 && darknessThreshold <= 255) m_darknessThreshold = darknessThreshold;
+    if (maxClip > 0) m_claheMaxClip = maxClip;
 }
-
-

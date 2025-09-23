@@ -41,6 +41,7 @@ static constexpr auto qt_meta_stringdata_ZN14MotionDetectorE = QtMocHelpers::str
     "frameReady",
     "",
     "img",
+    "clipLimit",
     "detected",
     "detectionCleared",
     "errorOccured",
@@ -66,20 +67,20 @@ Q_CONSTINIT static const uint qt_meta_data_ZN14MotionDetectorE[] = {
        4,       // signalCount
 
  // signals: name, argc, parameters, tag, flags, initial metatype offsets
-       1,    1,   50,    2, 0x06,    1 /* Public */,
-       4,    0,   53,    2, 0x06,    3 /* Public */,
-       5,    0,   54,    2, 0x06,    4 /* Public */,
-       6,    1,   55,    2, 0x06,    5 /* Public */,
+       1,    2,   50,    2, 0x06,    1 /* Public */,
+       5,    0,   55,    2, 0x06,    4 /* Public */,
+       6,    0,   56,    2, 0x06,    5 /* Public */,
+       7,    1,   57,    2, 0x06,    6 /* Public */,
 
  // slots: name, argc, parameters, tag, flags, initial metatype offsets
-       8,    0,   58,    2, 0x0a,    7 /* Public */,
-       9,    0,   59,    2, 0x0a,    8 /* Public */,
+       9,    0,   60,    2, 0x0a,    8 /* Public */,
+      10,    0,   61,    2, 0x0a,    9 /* Public */,
 
  // signals: parameters
-    QMetaType::Void, QMetaType::QImage,    3,
+    QMetaType::Void, QMetaType::QImage, QMetaType::Double,    3,    4,
     QMetaType::Void,
     QMetaType::Void,
-    QMetaType::Void, QMetaType::QString,    7,
+    QMetaType::Void, QMetaType::QString,    8,
 
  // slots: parameters
     QMetaType::Void,
@@ -100,6 +101,7 @@ Q_CONSTINIT const QMetaObject MotionDetector::staticMetaObject = { {
         // method 'frameReady'
         QtPrivate::TypeAndForceComplete<void, std::false_type>,
         QtPrivate::TypeAndForceComplete<const QImage &, std::false_type>,
+        QtPrivate::TypeAndForceComplete<double, std::false_type>,
         // method 'detected'
         QtPrivate::TypeAndForceComplete<void, std::false_type>,
         // method 'detectionCleared'
@@ -120,7 +122,7 @@ void MotionDetector::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int _
     auto *_t = static_cast<MotionDetector *>(_o);
     if (_c == QMetaObject::InvokeMetaMethod) {
         switch (_id) {
-        case 0: _t->frameReady((*reinterpret_cast< std::add_pointer_t<QImage>>(_a[1]))); break;
+        case 0: _t->frameReady((*reinterpret_cast< std::add_pointer_t<QImage>>(_a[1])),(*reinterpret_cast< std::add_pointer_t<double>>(_a[2]))); break;
         case 1: _t->detected(); break;
         case 2: _t->detectionCleared(); break;
         case 3: _t->errorOccured((*reinterpret_cast< std::add_pointer_t<QString>>(_a[1]))); break;
@@ -132,7 +134,7 @@ void MotionDetector::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int _
     if (_c == QMetaObject::IndexOfMethod) {
         int *result = reinterpret_cast<int *>(_a[0]);
         {
-            using _q_method_type = void (MotionDetector::*)(const QImage & );
+            using _q_method_type = void (MotionDetector::*)(const QImage & , double );
             if (_q_method_type _q_method = &MotionDetector::frameReady; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
                 *result = 0;
                 return;
@@ -194,9 +196,9 @@ int MotionDetector::qt_metacall(QMetaObject::Call _c, int _id, void **_a)
 }
 
 // SIGNAL 0
-void MotionDetector::frameReady(const QImage & _t1)
+void MotionDetector::frameReady(const QImage & _t1, double _t2)
 {
-    void *_a[] = { nullptr, const_cast<void*>(reinterpret_cast<const void*>(std::addressof(_t1))) };
+    void *_a[] = { nullptr, const_cast<void*>(reinterpret_cast<const void*>(std::addressof(_t1))), const_cast<void*>(reinterpret_cast<const void*>(std::addressof(_t2))) };
     QMetaObject::activate(this, &staticMetaObject, 0, _a);
 }
 

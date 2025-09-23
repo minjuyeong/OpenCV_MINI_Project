@@ -23,6 +23,9 @@ constexpr int   IGN_TRIM_K    = 15;       // 워밍업 종료 시 마스크 다�
 // [추가] 감지가 사라진 후 몇 초 더 녹화할지 결정
 constexpr int   REC_GRACE_PERIOD_S = 5; // 5초
 }
+// MOG2 학습률
+constexpr double LR_ARMED       = 0.002;  // 안정 상태 학습률
+constexpr double LR_WARMUP      = 0.01;   // 워밍업 시 학습률
 
 MotionDetector::MotionDetector(int camIndex, QObject* parent)
     : QObject(parent), m_camIndex(camIndex)
@@ -52,6 +55,23 @@ void MotionDetector::setRecordingSeconds(int sec)
 void MotionDetector::setCameraIndex(int idx)
 {
     m_camIndex = idx;
+}
+
+void MotionDetector::setClaheEnabled(bool enabled)
+{
+    m_useClahe = enabled;
+}
+
+void MotionDetector::setClaheParams(double clipLimit, int gridWidth, int gridHeight)
+{
+    if (clipLimit > 0) m_claheClipLimit = clipLimit;
+    if (gridWidth > 0 && gridHeight > 0) m_claheGridSize = cv::Size(gridWidth, gridHeight);
+}
+
+void MotionDetector::setMog2Params(int history, double varThreshold)
+{
+    if (history > 0) m_mog2History = history;
+    if (varThreshold > 0) m_mog2VarThreshold = varThreshold;
 }
 
 void MotionDetector::start()
@@ -170,7 +190,11 @@ void MotionDetector::runLoop()
         return;
     }
 
-    auto mog2 = cv::createBackgroundSubtractorMOG2(500, 16.0, true);
+    auto mog2 = cv::createBackgroundSubtractorMOG2(m_mog2History, m_mog2VarThreshold, true);
+
+    cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE();
+    clahe->setClipLimit(m_claheClipLimit);
+    clahe->setTilesGridSize(m_claheGridSize);
 
     m_armed = false;
     m_cameraReady = false;
@@ -184,7 +208,7 @@ void MotionDetector::runLoop()
         m_cameraReady = true;
         // ★★★ 변경: invokeMethod 대신 즉시 신호 발행
         QImage q0 = matToQImage(frame);
-        emit frameReady(q0);
+        emit frameReady(q0, 0.0);
     } else {
         emit errorOccured(QStringLiteral("Camera opened but first frame read failed."));
         m_running = false;
@@ -196,9 +220,48 @@ void MotionDetector::runLoop()
     bool wasDetectingLastFrame = false; // [추가] 이전 프레임 감지 상태
 
     while (m_running) {
+        cv::Mat frame;
         if (!m_cap.read(frame) || frame.empty()) continue;
 
-        double lr = m_armed ? 0.002 : 0.01;
+        //cv::Mat vis;
+        //frame.copyTo(vis);
+        // [추가] 원본 프레임을 먼저 QImage로 변환하고 신호를 보냄
+        //QImage qOrigImg = matToQImage(frame);
+        //emit originalFrameReady(qOrigImg);
+
+        // --- 자동 밝기 감지 (원본 frame 사용) ---
+        bool applyClaheThisFrame = m_useClahe;
+        double currentClipLimit = m_claheClipLimit;
+
+        if (m_autoClahe && !applyClaheThisFrame) {
+            cv::Mat gray;
+            cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY); // 원본으로 밝기 계산
+            cv::Scalar meanBrightness = cv::mean(gray);
+            double brightness = meanBrightness[0];
+
+            if (brightness < m_darknessThreshold) {
+                applyClaheThisFrame = true;
+                currentClipLimit = m_claheMaxClip - (m_claheMaxClip - 1.0) * (brightness / m_darknessThreshold);
+                clahe->setClipLimit(currentClipLimit);
+                qDebug() << "Brightness:" << brightness << "-> ClipLimit:" << currentClipLimit;
+            }
+        }
+
+        // --- 영상 처리 (결과는 processedFrame에 저장) ---
+        cv::Mat processedFrame; // 2. 작업용 이미지를 담을 변수
+        if (applyClaheThisFrame) {
+            cv::Mat lab_image;
+            cv::cvtColor(frame, lab_image, cv::COLOR_BGR2Lab);
+            std::vector<cv::Mat> lab_planes(3);
+            cv::split(lab_image, lab_planes);
+            clahe->apply(lab_planes[0], lab_planes[0]);
+            cv::merge(lab_planes, lab_image);
+            cv::cvtColor(lab_image, processedFrame, cv::COLOR_Lab2BGR);
+        } else {
+            frame.copyTo(processedFrame); // 필터를 적용하지 않으면 원본을 그대로 복사
+        }
+
+        double lr = m_armed ? LR_ARMED : LR_WARMUP;
         mog2->apply(frame, fg, lr);
 
         cv::threshold(fg, fg, THRESH_BIN, 255, cv::THRESH_BINARY);
@@ -218,8 +281,7 @@ void MotionDetector::runLoop()
             }
         } else {
             if (!m_ignoreMask.empty()) {
-                cv::Mat inv; cv::bitwise_not(m_ignoreMask, inv);
-                cv::bitwise_and(fg, inv, fg);
+                cv::bitwise_and(fg, m_ignoreMask, fg, cv::noArray());
             }
         }
 
@@ -228,7 +290,10 @@ void MotionDetector::runLoop()
             std::vector<std::vector<cv::Point>> contours;
             cv::findContours(fg, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
             for (auto& c : contours) {
-                if (cv::contourArea(c) > MIN_AREA) { detectedNow = true; break; }
+                if (cv::contourArea(c) > MIN_AREA) {
+                    detectedNow = true;
+                    break;
+                }
             }
         }
 
@@ -269,11 +334,12 @@ void MotionDetector::runLoop()
                     m_missCount = 0; // 카운터 초기화
                 }
             }
+        } else if (!detectedNow && m_motionInProgress) {
+            m_motionInProgress = false;
         }
 
         // [수정 2] 지속형 녹화 로직
         if (m_recording) {
-            // ... (프레임 크기 조절 및 m_writer.write(frame)은 동일) ...
 
             // 마지막 감지 후 N초가 지났고, 최소 녹화 시간도 지났으면 녹화 중지
             auto now = steady_clock::now();
@@ -284,12 +350,32 @@ void MotionDetector::runLoop()
                 stopRecording();
             }
         }
+        cv::Mat vis;
+        processedFrame.copyTo(vis);
 
         // ★★★ 변경: invokeMethod 대신 즉시 신호 발행
-        QImage qimg = matToQImage(frame);
-        emit frameReady(qimg);
+        QImage qProcessedImg = matToQImage(vis); // vis 변수 사용 (박스가 그려진 최종본)
+        // [수정] 계산된 clipLimit 값을 신호에 담아 보냄
+        emit frameReady(qProcessedImg, applyClaheThisFrame ? currentClipLimit : 0.0);
     }
 
     stopRecording();
     if (m_cap.isOpened()) m_cap.release();
 }
+void MotionDetector::setAutoClaheEnabled(bool enabled)
+{
+    m_autoClahe = enabled;
+}
+
+// [수정] 자동 모드 파라미터를 설정하는 함수
+void MotionDetector::setAutoClaheParams(int darknessThreshold, double maxClip)
+{
+    if (darknessThreshold > 0 && darknessThreshold <= 255) {
+        m_darknessThreshold = darknessThreshold;
+    }
+    if (maxClip > 0) {
+        m_claheMaxClip = maxClip;
+    }
+}
+
+

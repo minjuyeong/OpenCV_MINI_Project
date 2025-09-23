@@ -30,6 +30,12 @@ Tab1_camera::Tab1_camera(QWidget *parent)
     m_detector->setOutputDirectory(QDir::homePath()+"/Videos/cctv");
     m_detector->setRecordingSeconds(8);
 
+    // [추가] CLAHE 기능을 활성화합니다.
+    m_detector->setClaheEnabled(true);
+    // [추가] CLAHE 필터 강도를 설정합니다.
+    // 파라미터: (clipLimit, gridWidth, gridHeight)
+    m_detector->setClaheParams(8.0, 4, 4);
+
     // ★ start()보다 '먼저' 신호 연결을 건다
     connect(m_detector, &MotionDetector::frameReady,
             this, &Tab1_camera::onFrameReady, Qt::QueuedConnection);
@@ -39,6 +45,8 @@ Tab1_camera::Tab1_camera(QWidget *parent)
             this, [](const QString& e){ qWarning() << e; });
     // [추가] 위험 해제 신호와 슬롯 연결
     connect(m_detector, &MotionDetector::detectionCleared, this, &Tab1_camera::onDetectionCleared, Qt::QueuedConnection);
+    // [추가] 원본 영상 신호 연결
+    //connect(m_detector, &MotionDetector::originalFrameReady, this, &Tab1_camera::onOriginalFrameReady, Qt::QueuedConnection);
 
     // 이제 시작
     m_detector->start();
@@ -120,17 +128,28 @@ void Tab1_camera::onToggleDisplay()
     setDisplayEnabled(turningOn);
 }
 
-void Tab1_camera::onFrameReady(const QImage &img)
+void Tab1_camera::onFrameReady(const QImage &img, double clipLimit)
 {
-    m_lastFrame = img;
+    if (!m_showing) return;
 
-    if (!m_showing || !m_camLabel) return;
+    // 1. 비디오 라벨 업데이트
+    if (ui->pCam) {
+        ui->pCam->setPixmap(QPixmap::fromImage(img));
+    }
 
-    // setScaledContents(true) 덕분에 별도 스케일링 불필요
-    m_camLabel->setPixmap(QPixmap::fromImage(img));
-
-    // (필요 시) 현재 라벨 사이즈 확인
-    // qDebug() << "[Tab1] pCam size =" << m_camLabel->size();
+    // 2. 필터 강도 표시 라벨 업데이트
+    // (UI 파일에 filterStatusLabel 이라는 QLabel을 추가했다고 가정)
+    if (ui->filterStatusLabel) {
+        if (clipLimit > 0.0) {
+            // 필터가 켜져 있으면 강도를 소수점 한 자리까지 표시
+            QString statusText = QString("CLAHE Filter: ON (Strength: %1)")
+                                     .arg(clipLimit, 0, 'f', 1);
+            ui->filterStatusLabel->setText(statusText);
+        } else {
+            // 필터가 꺼져 있으면 OFF로 표시
+            ui->filterStatusLabel->setText("CLAHE Filter: OFF");
+        }
+    }
 }
 
 void Tab1_camera::resizeEvent(QResizeEvent *e)
@@ -218,3 +237,10 @@ void Tab1_camera::closePopup()
         m_alertBox->deleteLater();
     }
 }
+// [추가] 원본 영상을 표시할 슬롯
+// void Tab1_camera::onOriginalFrameReady(const QImage &img) {
+//     if (m_showing && ui->pCam_original) {
+//         ui->pCam_original->setPixmap(QPixmap::fromImage(img));
+//     }
+// }
+

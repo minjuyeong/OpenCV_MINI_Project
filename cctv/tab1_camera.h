@@ -25,7 +25,8 @@ public:
 
 private slots:
     void onToggleDisplay();                // 버튼 클릭 → 화면 표시 on/off
-    void onFrameReady(const QImage& img);  // 카메라 프레임 수신
+    void onFrameReady(const QImage& img, double clipLimit);  // 카메라 프레임 수신
+    //void onOriginalFrameReady(const QImage& img); // [추가] 원본 수신 슬롯
     void onDetected();                     // 감지 팝업
     void onDetectionCleared(); // [추가] 위험 해제 슬롯
 

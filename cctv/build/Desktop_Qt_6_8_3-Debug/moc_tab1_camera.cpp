@@ -43,6 +43,7 @@ static constexpr auto qt_meta_stringdata_ZN11Tab1_cameraE = QtMocHelpers::string
     "",
     "onFrameReady",
     "img",
+    "clipLimit",
     "onDetected",
     "onDetectionCleared"
 );
@@ -65,13 +66,13 @@ Q_CONSTINIT static const uint qt_meta_data_ZN11Tab1_cameraE[] = {
 
  // slots: name, argc, parameters, tag, flags, initial metatype offsets
        1,    0,   38,    2, 0x08,    1 /* Private */,
-       3,    1,   39,    2, 0x08,    2 /* Private */,
-       5,    0,   42,    2, 0x08,    4 /* Private */,
-       6,    0,   43,    2, 0x08,    5 /* Private */,
+       3,    2,   39,    2, 0x08,    2 /* Private */,
+       6,    0,   44,    2, 0x08,    5 /* Private */,
+       7,    0,   45,    2, 0x08,    6 /* Private */,
 
  // slots: parameters
     QMetaType::Void,
-    QMetaType::Void, QMetaType::QImage,    4,
+    QMetaType::Void, QMetaType::QImage, QMetaType::Double,    4,    5,
     QMetaType::Void,
     QMetaType::Void,
 
@@ -92,6 +93,7 @@ Q_CONSTINIT const QMetaObject Tab1_camera::staticMetaObject = { {
         // method 'onFrameReady'
         QtPrivate::TypeAndForceComplete<void, std::false_type>,
         QtPrivate::TypeAndForceComplete<const QImage &, std::false_type>,
+        QtPrivate::TypeAndForceComplete<double, std::false_type>,
         // method 'onDetected'
         QtPrivate::TypeAndForceComplete<void, std::false_type>,
         // method 'onDetectionCleared'
@@ -106,7 +108,7 @@ void Tab1_camera::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int _id,
     if (_c == QMetaObject::InvokeMetaMethod) {
         switch (_id) {
         case 0: _t->onToggleDisplay(); break;
-        case 1: _t->onFrameReady((*reinterpret_cast< std::add_pointer_t<QImage>>(_a[1]))); break;
+        case 1: _t->onFrameReady((*reinterpret_cast< std::add_pointer_t<QImage>>(_a[1])),(*reinterpret_cast< std::add_pointer_t<double>>(_a[2]))); break;
         case 2: _t->onDetected(); break;
         case 3: _t->onDetectionCleared(); break;
         default: ;

@@ -11,6 +11,7 @@
 
 #include <QtCore/QVariant>
 #include <QtWidgets/QApplication>
+#include <QtWidgets/QHBoxLayout>
 #include <QtWidgets/QLabel>
 #include <QtWidgets/QPushButton>
 #include <QtWidgets/QVBoxLayout>
@@ -21,26 +22,47 @@ QT_BEGIN_NAMESPACE
 class Ui_Tab1_camera
 {
 public:
+    QWidget *verticalLayoutWidget;
     QVBoxLayout *verticalLayout;
     QLabel *pCam;
+    QHBoxLayout *horizontalLayout;
     QPushButton *pPBCam;
+    QLabel *filterStatusLabel;
 
     void setupUi(QWidget *Tab1_camera)
     {
         if (Tab1_camera->objectName().isEmpty())
             Tab1_camera->setObjectName("Tab1_camera");
         Tab1_camera->resize(550, 514);
-        verticalLayout = new QVBoxLayout(Tab1_camera);
+        Tab1_camera->setMinimumSize(QSize(0, 514));
+        verticalLayoutWidget = new QWidget(Tab1_camera);
+        verticalLayoutWidget->setObjectName("verticalLayoutWidget");
+        verticalLayoutWidget->setGeometry(QRect(10, 10, 531, 491));
+        verticalLayout = new QVBoxLayout(verticalLayoutWidget);
         verticalLayout->setObjectName("verticalLayout");
-        pCam = new QLabel(Tab1_camera);
+        verticalLayout->setSizeConstraint(QLayout::SizeConstraint::SetDefaultConstraint);
+        verticalLayout->setContentsMargins(0, 0, 0, 0);
+        pCam = new QLabel(verticalLayoutWidget);
         pCam->setObjectName("pCam");
 
         verticalLayout->addWidget(pCam);
 
-        pPBCam = new QPushButton(Tab1_camera);
+        horizontalLayout = new QHBoxLayout();
+        horizontalLayout->setObjectName("horizontalLayout");
+        pPBCam = new QPushButton(verticalLayoutWidget);
         pPBCam->setObjectName("pPBCam");
 
-        verticalLayout->addWidget(pPBCam);
+        horizontalLayout->addWidget(pPBCam);
+
+        filterStatusLabel = new QLabel(verticalLayoutWidget);
+        filterStatusLabel->setObjectName("filterStatusLabel");
+
+        horizontalLayout->addWidget(filterStatusLabel);
+
+        horizontalLayout->setStretch(0, 8);
+        horizontalLayout->setStretch(1, 2);
+
+        verticalLayout->addLayout(horizontalLayout);
 
         verticalLayout->setStretch(0, 9);
         verticalLayout->setStretch(1, 1);
@@ -55,6 +77,7 @@ public:
         Tab1_camera->setWindowTitle(QCoreApplication::translate("Tab1_camera", "Form", nullptr));
         pCam->setText(QString());
         pPBCam->setText(QCoreApplication::translate("Tab1_camera", " \354\271\264\353\251\224\353\235\274 \354\274\234\352\270\260", nullptr));
+        filterStatusLabel->setText(QCoreApplication::translate("Tab1_camera", "\355\225\204\355\204\260 \352\260\225\353\217\204", nullptr));
     } // retranslateUi
 
 };

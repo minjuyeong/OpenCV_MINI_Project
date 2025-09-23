@@ -2605,17 +2605,11 @@ mainwidget.o: ../../mainwidget.cpp ../../mainwidget.h \
 		../../tab2_video.h \
 		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtGui/QIcon \
 		ui_mainwidget.h \
-		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtCore/QVariant \
-		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/QApplication \
-		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/qapplication.h \
-		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/QHBoxLayout \
+		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/QVBoxLayout \
 		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/qboxlayout.h \
 		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/qlayout.h \
 		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/qlayoutitem.h \
 		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/qgridlayout.h \
-		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/QTabWidget \
-		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/qtabwidget.h \
-		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/QVBoxLayout \
 		../../streamserver.h
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o mainwidget.o ../../mainwidget.cpp
 
@@ -3178,17 +3172,14 @@ tab1_camera.o: ../../tab1_camera.cpp ../../tab1_camera.h \
 		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtCore/QString \
 		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtCore/QFuture \
 		ui_tab1_camera.h \
-		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtCore/QVariant \
-		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/QApplication \
-		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/qapplication.h \
-		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/QPushButton \
-		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/qpushbutton.h \
-		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/qabstractbutton.h \
 		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/QVBoxLayout \
 		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/qboxlayout.h \
 		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/qlayout.h \
 		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/qlayoutitem.h \
 		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/qgridlayout.h \
+		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/QPushButton \
+		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/qpushbutton.h \
+		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/qabstractbutton.h \
 		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtCore/QTimer \
 		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtCore/qtimer.h \
 		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtCore/qbasictimer.h \
@@ -3401,24 +3392,12 @@ tab2_video.o: ../../tab2_video.cpp ../../tab2_video.h \
 		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtCore/qpointer.h \
 		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtGui/QIcon \
 		ui_tab2_video.h \
-		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtCore/QVariant \
-		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/QApplication \
-		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/qapplication.h \
-		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/QHBoxLayout \
-		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/qboxlayout.h \
-		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/qlayout.h \
-		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/qlayoutitem.h \
-		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/qgridlayout.h \
-		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/QLabel \
-		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/qlabel.h \
-		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/qframe.h \
-		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtGui/qpicture.h \
-		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtGui/qtextdocument.h \
 		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/QListWidget \
 		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/qlistwidget.h \
 		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/qlistview.h \
 		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/qabstractitemview.h \
 		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/qabstractscrollarea.h \
+		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/qframe.h \
 		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtCore/qabstractitemmodel.h \
 		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtCore/qitemselectionmodel.h \
 		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/qabstractitemdelegate.h \
@@ -3432,13 +3411,6 @@ tab2_video.o: ../../tab2_video.cpp ../../tab2_video.h \
 		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/qtabbar.h \
 		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/qtabwidget.h \
 		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/qrubberband.h \
-		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/QPushButton \
-		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/qpushbutton.h \
-		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/qabstractbutton.h \
-		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/QSpacerItem \
-		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/QStackedWidget \
-		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/qstackedwidget.h \
-		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/QVBoxLayout \
 		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtWidgets/QListWidgetItem \
 		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtCore/QFileInfo \
 		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtCore/qfileinfo.h \
@@ -3476,7 +3448,9 @@ tab2_video.o: ../../tab2_video.cpp ../../tab2_video.h \
 		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtGui/qtextoption.h \
 		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtGui/qpen.h \
 		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtGui/QPixmap \
-		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtGui/QImage
+		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtGui/QImage \
+		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtCore/QMap \
+		/home/ubuntu/Qt/6.8.3/gcc_64/include/QtCore/QDate
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o tab2_video.o ../../tab2_video.cpp
 
 moc_mainwidget.o: moc_mainwidget.cpp 

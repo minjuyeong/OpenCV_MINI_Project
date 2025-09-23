@@ -1,14 +1,10 @@
 #include "tab1_camera.h"
 #include "ui_tab1_camera.h"
-
-#include <QVBoxLayout>
-#include <QPushButton>
-#include <QTimer>
-#include <QScreen>
-#include <QGuiApplication>
 #include <QDir>
 #include <QDebug>
-#include <QMetaType>
+#include <QMessageBox>
+#include <QTimer>
+#include <QVBoxLayout> // ensureCamLabel 폴백을 위해 추가
 
 Tab1_camera::Tab1_camera(QWidget *parent)
     : QWidget(parent)
@@ -17,174 +13,129 @@ Tab1_camera::Tab1_camera(QWidget *parent)
     ui->setupUi(this);
     ensureCamLabel();
 
-    // --- 버튼 연결 ---
-    QPushButton* btn = ui->pPBCam ? ui->pPBCam : this->findChild<QPushButton*>("pPBCam");
-    if (btn) {
-        connect(btn, &QPushButton::clicked, this, &Tab1_camera::onToggleDisplay);
-    } else {
-        qWarning() << "[Tab1] pPBCam 버튼을 찾을 수 없습니다. (objectName=pPBCam)";
-    }
+    connect(ui->pPBCam, &QPushButton::clicked, this, &Tab1_camera::onToggleDisplay);
 
-    // --- MotionDetector 준비 ---
-    m_detector = new MotionDetector(0); // parent 주지 않음 (moveToThread 가능)
+    m_detector = new MotionDetector(0);
     m_detector->setOutputDirectory(QDir::homePath()+"/Videos/cctv");
-    m_detector->setRecordingSeconds(8);
 
-    // ★ start()보다 '먼저' 신호 연결을 건다
-    connect(m_detector, &MotionDetector::frameReady,
-            this, &Tab1_camera::onFrameReady, Qt::QueuedConnection);
-    connect(m_detector, &MotionDetector::detected,
-            this, &Tab1_camera::onDetected,   Qt::QueuedConnection);
-    connect(m_detector, &MotionDetector::errorOccured,
-            this, [](const QString& e){ qWarning() << e; });
+    // ✅ 자동 CLAHE 모드를 기본으로 활성화합니다.
+    m_detector->setAutoClaheEnabled(m_autoClaheEnabled);
+    m_detector->setAutoClaheParams(80, 8.0); // (어둡기 임계값, 최대 필터 강도)
 
-    // 이제 시작
+    // ✅ 변경된 시그널/슬롯에 맞게 연결합니다.
+    connect(m_detector, &MotionDetector::frameReady, this, &Tab1_camera::onFrameReady);
+    connect(m_detector, &MotionDetector::detected, this, &Tab1_camera::onDetected);
+    connect(m_detector, &MotionDetector::detectionCleared, this, &Tab1_camera::onDetectionCleared);
+    connect(m_detector, &MotionDetector::errorOccured, this, [](const QString& e){ qWarning() << e; });
+
     m_detector->start();
-
-    // 처음엔 표시 꺼둠
     setDisplayEnabled(false);
 }
 
-Tab1_camera::~Tab1_camera()
-{
+Tab1_camera::~Tab1_camera() {
     if (m_detector) m_detector->stop();
     delete ui;
 }
 
-// === pCam(QLabel)을 '그대로' 화면 라벨로 사용 ===
-void Tab1_camera::ensureCamLabel()
-{
-    if (m_camLabel) return;
+// ✅ 스페이스 바를 누르면 자동 CLAHE 모드를 켜고 끄는 로직
+void Tab1_camera::keyPressEvent(QKeyEvent *event) {
+    if (event->key() == Qt::Key_Space) {
+        m_autoClaheEnabled = !m_autoClaheEnabled; // 상태 뒤집기
+        QMetaObject::invokeMethod(m_detector, "setAutoClaheEnabled", Q_ARG(bool, m_autoClaheEnabled));
+        qDebug() << "[UI] Auto-CLAHE Mode Toggled:" << m_autoClaheEnabled;
 
-    // ui의 pCam을 그대로 사용 (새 QLabel 생성 X)
-    m_camLabel = ui->pCam ? qobject_cast<QLabel*>(ui->pCam)
-                          : this->findChild<QLabel*>("pCam");
-
-    if (!m_camLabel) {
-        // 예외 상황 폴백
-        m_camLabel = new QLabel(this);
-        auto *lay = qobject_cast<QVBoxLayout*>(this->layout());
-        if (!lay) {
-            lay = new QVBoxLayout(this);
-            lay->setContentsMargins(0,0,0,0);
-            lay->setSpacing(0);
+        // ✅ UI 라벨 즉시 업데이트 (사용자 경험 향상)
+        // UI 파일에 'filterStatusLabel'이라는 이름의 QLabel이 있어야 합니다.
+        if (ui->filterStatusLabel) {
+            QString offText = m_autoClaheEnabled ? "CLAHE Filter: AUTO" : "CLAHE Filter: OFF";
+            ui->filterStatusLabel->setText(offText);
         }
-        lay->insertWidget(0, m_camLabel, 1);
-    }
 
+    } else {
+        QWidget::keyPressEvent(event);
+    }
+}
+
+// ✅ [최종] UI를 업데이트하는 슬롯 구현
+void Tab1_camera::onFrameReady(const QImage &img, double clipLimit) {
+    m_lastFrame = img;
+    if (!m_showing) return;
+
+    m_camLabel->setPixmap(QPixmap::fromImage(img));
+
+    // UI 파일에 'filterStatusLabel'이라는 QLabel이 있어야 합니다.
+    if (ui->filterStatusLabel) {
+        if (clipLimit > 0.0) {
+            QString statusText = QString("CLAHE Filter: ON (Strength: %1)")
+            .arg(clipLimit, 0, 'f', 1);
+            ui->filterStatusLabel->setText(statusText);
+        } else {
+            QString offText = m_autoClaheEnabled ? "CLAHE Filter: AUTO" : "CLAHE Filter: OFF";
+            ui->filterStatusLabel->setText(offText);
+        }
+    }
+}
+
+void Tab1_camera::ensureCamLabel() {
+    if (m_camLabel) return;
+    m_camLabel = ui->pCam;
     m_camLabel->setAlignment(Qt::AlignCenter);
     m_camLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    m_camLabel->setMinimumSize(100, 60);
     m_camLabel->setScaledContents(true);
 
     if (!m_badge) {
-        QWidget* host = m_camLabel->parentWidget() ? m_camLabel->parentWidget() : this;
-        m_badge = new QLabel(host);
+        m_badge = new QLabel(m_camLabel);
         m_badge->setText(QStringLiteral("감지"));
         m_badge->setStyleSheet("background:#d32f2f;color:white;padding:6px 10px;border-radius:6px;font-weight:600;");
         m_badge->hide();
-        m_badge->raise();
+        m_badge->adjustSize();
     }
 }
 
-
-void Tab1_camera::setDisplayEnabled(bool enable)
-{
-    m_showing = enable;
-
-    if (QPushButton* btn = ui->pPBCam ? ui->pPBCam : this->findChild<QPushButton*>("pPBCam")) {
-        btn->setText(m_showing ? QStringLiteral("카메라 끄기(표시)")
-                               : QStringLiteral("카메라 켜기(표시)"));
-    }
-
-    if (!m_showing) {
-        if (m_camLabel) m_camLabel->clear();
-        return;
-    }
-
-    // 표시 켰을 때 마지막 프레임이 있으면 즉시 뿌려주기
-    if (!m_lastFrame.isNull() && m_camLabel) {
-        m_camLabel->setPixmap(QPixmap::fromImage(m_lastFrame));
-    } else {
-        // 아직 프레임이 안 왔다면 안내 텍스트 — 첫 프레임 오면 onFrameReady가 덮어씀
-        if (m_camLabel) m_camLabel->setText(QStringLiteral("카메라 준비 중..."));
-    }
-}
-
-void Tab1_camera::onToggleDisplay()
-{
-    const bool turningOn = !m_showing;
-    qDebug() << "[Tab1] Toggle display clicked. showing ->" << turningOn;
-    setDisplayEnabled(turningOn);
-}
-
-void Tab1_camera::onFrameReady(const QImage &img)
-{
-    m_lastFrame = img;
-
-    if (!m_showing || !m_camLabel) return;
-
-    // setScaledContents(true) 덕분에 별도 스케일링 불필요
-    m_camLabel->setPixmap(QPixmap::fromImage(img));
-
-    // (필요 시) 현재 라벨 사이즈 확인
-    // qDebug() << "[Tab1] pCam size =" << m_camLabel->size();
-}
-
-void Tab1_camera::resizeEvent(QResizeEvent *e)
-{
+void Tab1_camera::resizeEvent(QResizeEvent *e) {
     QWidget::resizeEvent(e);
-
-    if (m_badge && m_badge->parentWidget()) {
-        QWidget* camPanel = qobject_cast<QWidget*>(m_badge->parent());
-        int x = camPanel->width()  - m_badge->sizeHint().width() - 10;
-        int y = 10;
-        m_badge->move(x, y);
-    }
-
-    if (m_showing && !m_lastFrame.isNull() && m_camLabel) {
-        m_camLabel->setPixmap(QPixmap::fromImage(m_lastFrame));
+    if(m_badge) {
+        int x = m_camLabel->width() - m_badge->width() - 10;
+        m_badge->move(x, 10);
     }
 }
 
-void Tab1_camera::showPopup()
-{
-    if (m_alertBox && m_alertBox->isVisible()) return;
-
-    QWidget *top = this->window();
-    m_alertBox = new QMessageBox(QMessageBox::Information,
-                                 QStringLiteral("알림"),
-                                 QStringLiteral("감지"),
-                                 QMessageBox::Ok,
-                                 top);
-    m_alertBox->setWindowModality(Qt::ApplicationModal);
-    m_alertBox->setWindowFlag(Qt::Dialog, true);
-    m_alertBox->setWindowFlag(Qt::CustomizeWindowHint, true);
-    m_alertBox->setWindowFlag(Qt::WindowStaysOnTopHint, true);
-    m_alertBox->setAttribute(Qt::WA_DeleteOnClose, true);
-
-    m_alertBox->show();
-    m_alertBox->raise();
-    m_alertBox->activateWindow();
-
-    QScreen *scr = top ? top->screen() : QGuiApplication::primaryScreen();
-    const QRect sr = scr ? scr->availableGeometry()
-                         : QGuiApplication::primaryScreen()->availableGeometry();
-    const QSize sz = m_alertBox->sizeHint();
-    m_alertBox->move(sr.center() - QPoint(sz.width()/2, sz.height()/2));
-
-    QTimer *autoClose = new QTimer(m_alertBox);
-    autoClose->setSingleShot(true);
-    QObject::connect(autoClose, &QTimer::timeout, m_alertBox, &QMessageBox::accept);
-    autoClose->start(3000);
+void Tab1_camera::setDisplayEnabled(bool enable) {
+    m_showing = enable;
+    ui->pPBCam->setText(m_showing ? "카메라 끄기(표시)" : "카메라 켜기(표시)");
+    if (!m_showing) m_camLabel->clear();
+    else if (!m_lastFrame.isNull()) m_camLabel->setPixmap(QPixmap::fromImage(m_lastFrame));
+    else m_camLabel->setText("카메라 준비 중...");
 }
 
-void Tab1_camera::onDetected()
-{
-    if (m_badge) {
-        m_badge->show();
-        m_badge->raise();
-        QTimer::singleShot(3000, m_badge, [this]{ if (m_badge) m_badge->hide(); });
-    }
+void Tab1_camera::onToggleDisplay() { setDisplayEnabled(!m_showing); }
+
+void Tab1_camera::onDetected() {
+    if (m_isAlertActive) return;
+    m_isAlertActive = true;
+    if (m_badge) { m_badge->show(); m_badge->raise(); }
     showPopup();
 }
+
+void Tab1_camera::onDetectionCleared() {
+    if (!m_isAlertActive) return;
+    m_isAlertActive = false;
+    if (m_badge) m_badge->hide();
+    closePopup();
+}
+
+void Tab1_camera::showPopup() {
+    if (m_alertBox) return;
+    m_alertBox = new QMessageBox(QMessageBox::Warning, "위험 감지", "현관 앞에서 움직임이 감지되었습니다!", QMessageBox::NoButton, this->window());
+    m_alertBox->setWindowModality(Qt::NonModal);
+    m_alertBox->setWindowFlag(Qt::WindowStaysOnTopHint, true);
+    m_alertBox->setAttribute(Qt::WA_DeleteOnClose, true); // 자동 닫힘 시 삭제
+    connect(m_alertBox, &QMessageBox::finished, [this](){ m_alertBox = nullptr; });
+    m_alertBox->show();
+    QTimer::singleShot(3000, m_alertBox, &QMessageBox::accept);
+}
+
+void Tab1_camera::closePopup() {
+    if (m_alertBox) m_alertBox->close();
+}
+

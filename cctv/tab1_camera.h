@@ -2,17 +2,14 @@
 #define TAB1_CAMERA_H
 
 #include <QWidget>
-#include <QLabel>
-#include <QMessageBox>
 #include <QPointer>
-#include <QImage>
-
-class QPushButton;
-class QVBoxLayout;
+#include <QKeyEvent>
 
 #include "motiondetector.h"
 
+QT_BEGIN_NAMESPACE
 namespace Ui { class Tab1_camera; }
+QT_END_NAMESPACE
 
 class Tab1_camera : public QWidget
 {
@@ -21,31 +18,37 @@ public:
     explicit Tab1_camera(QWidget *parent = nullptr);
     ~Tab1_camera();
 
+    // ✅ private -> public으로 이동하여 외부에서 접근 가능하도록 수정
     MotionDetector* detector() const { return m_detector; }
 
-private slots:
-    void onToggleDisplay();                // 버튼 클릭 → 화면 표시 on/off
-    void onFrameReady(const QImage& img);  // 카메라 프레임 수신
-    void onDetected();                     // 감지 팝업
-
 protected:
+    void keyPressEvent(QKeyEvent *event) override;
+    // ✅ resizeEvent 선언을 추가하여 cpp 파일의 구현과 일치시킴
     void resizeEvent(QResizeEvent *e) override;
 
-private:
-    void ensureCamLabel();                 // pCam 안에 라벨 세팅
-    void setDisplayEnabled(bool enable);   // 표시 on/off 토글
-    void showPopup();                      // 팝업(3초 자동 닫힘)
+private slots:
+    void onToggleDisplay();
+    void onFrameReady(const QImage& img, double clipLimit);
+    void onDetected();
+    void onDetectionCleared();
 
 private:
-    Ui::Tab1_camera *ui = nullptr;
+    void ensureCamLabel();
+    void setDisplayEnabled(bool enable);
+    void showPopup();
+    void closePopup();
 
-    QLabel *m_camLabel = nullptr;          // 영상 표시 라벨
-    QLabel *m_badge    = nullptr;          // 우상단 "감지" 배지(보조)
-    bool    m_showing  = false;            // 표시 on/off 상태
-
-    QPointer<QMessageBox> m_alertBox;      // 팝업 핸들
-    MotionDetector *m_detector = nullptr;  // 백그라운드 감지/녹화
-    QImage m_lastFrame;                    // 마지막 프레임(즉시 표시용)
+private:
+    Ui::Tab1_camera *ui;
+    class QLabel *m_camLabel = nullptr;
+    class QLabel *m_badge = nullptr;
+    bool m_showing = false;
+    QPointer<class QMessageBox> m_alertBox;
+    MotionDetector *m_detector = nullptr;
+    QImage m_lastFrame;
+    bool m_isAlertActive = false;
+    bool m_autoClaheEnabled = true;
 };
 
 #endif // TAB1_CAMERA_H
+

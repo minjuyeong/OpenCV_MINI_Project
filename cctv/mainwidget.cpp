@@ -1,6 +1,7 @@
 #include "mainwidget.h"
 #include "ui_mainwidget.h"
 #include <QVBoxLayout>
+#include "streamserver.h" // [추가] StreamServer 헤더 포함
 
 MainWidget::MainWidget(QWidget *parent)
     : QWidget(parent)
@@ -23,6 +24,14 @@ MainWidget::MainWidget(QWidget *parent)
     lay2->addWidget(pTab2_video);
     ui->pTab2->setLayout(lay2);
 
+    // 1. 스트림 서버 생성 (8080 포트 사용)
+    StreamServer *server = new StreamServer(8080, this);
+
+    // 2. Tab1의 MotionDetector가 프레임을 만들 때마다(frameReady 신호)
+    //    스트림 서버가 받아서 웹으로 방송하도록(onNewFrame 슬롯) 연결합니다.
+    if (auto det = pTab1_camera->detector()) {
+        connect(det, &MotionDetector::frameReady, server, &StreamServer::onNewFrame);
+    }
 
     // (선택) Tab1 감지시 Tab2에도 팝업 띄우고 싶으면:
     if (auto det = pTab1_camera->detector()) {

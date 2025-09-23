@@ -27,6 +27,7 @@ private slots:
     void onToggleDisplay();                // 버튼 클릭 → 화면 표시 on/off
     void onFrameReady(const QImage& img);  // 카메라 프레임 수신
     void onDetected();                     // 감지 팝업
+    void onDetectionCleared(); // [추가] 위험 해제 슬롯
 
 protected:
     void resizeEvent(QResizeEvent *e) override;
@@ -35,6 +36,7 @@ private:
     void ensureCamLabel();                 // pCam 안에 라벨 세팅
     void setDisplayEnabled(bool enable);   // 표시 on/off 토글
     void showPopup();                      // 팝업(3초 자동 닫힘)
+    void closePopup(); // [추가] 팝업 닫기 함수
 
 private:
     Ui::Tab1_camera *ui = nullptr;
@@ -46,6 +48,8 @@ private:
     QPointer<QMessageBox> m_alertBox;      // 팝업 핸들
     MotionDetector *m_detector = nullptr;  // 백그라운드 감지/녹화
     QImage m_lastFrame;                    // 마지막 프레임(즉시 표시용)
+
+    bool m_isAlertActive = false; // [추가] 현재 경보 상태 변수
 };
 
 #endif // TAB1_CAMERA_H

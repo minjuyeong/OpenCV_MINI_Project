@@ -37,6 +37,8 @@ Tab1_camera::Tab1_camera(QWidget *parent)
             this, &Tab1_camera::onDetected,   Qt::QueuedConnection);
     connect(m_detector, &MotionDetector::errorOccured,
             this, [](const QString& e){ qWarning() << e; });
+    // [추가] 위험 해제 신호와 슬롯 연결
+    connect(m_detector, &MotionDetector::detectionCleared, this, &Tab1_camera::onDetectionCleared, Qt::QueuedConnection);
 
     // 이제 시작
     m_detector->start();
@@ -149,19 +151,30 @@ void Tab1_camera::resizeEvent(QResizeEvent *e)
 
 void Tab1_camera::showPopup()
 {
-    if (m_alertBox && m_alertBox->isVisible()) return;
+    // if (m_alertBox && m_alertBox->isVisible()) return;
+
+    // QWidget *top = this->window();
+    // m_alertBox = new QMessageBox(QMessageBox::Information,
+    //                              QStringLiteral("알림"),
+    //                              QStringLiteral("감지"),
+    //                              QMessageBox::Ok,
+    //                              top);
+    // m_alertBox->setWindowModality(Qt::ApplicationModal);
+    // m_alertBox->setWindowFlag(Qt::Dialog, true);
+    // m_alertBox->setWindowFlag(Qt::CustomizeWindowHint, true);
+    // m_alertBox->setWindowFlag(Qt::WindowStaysOnTopHint, true);
+    // m_alertBox->setAttribute(Qt::WA_DeleteOnClose, true);
+    if (m_alertBox) return;
 
     QWidget *top = this->window();
-    m_alertBox = new QMessageBox(QMessageBox::Information,
-                                 QStringLiteral("알림"),
-                                 QStringLiteral("감지"),
-                                 QMessageBox::Ok,
-                                 top);
-    m_alertBox->setWindowModality(Qt::ApplicationModal);
-    m_alertBox->setWindowFlag(Qt::Dialog, true);
-    m_alertBox->setWindowFlag(Qt::CustomizeWindowHint, true);
+    m_alertBox = new QMessageBox(QMessageBox::Warning,
+                                 QStringLiteral("위험 감지"),
+                                 QStringLiteral("현관 앞에서 움직임이 감지되었습니다!"),
+                                 QMessageBox::NoButton, top);
+    m_alertBox->setWindowModality(Qt::NonModal);
     m_alertBox->setWindowFlag(Qt::WindowStaysOnTopHint, true);
-    m_alertBox->setAttribute(Qt::WA_DeleteOnClose, true);
+    m_alertBox->setAttribute(Qt::WA_DeleteOnClose, false); // 자동 삭제 비활성화
+
 
     m_alertBox->show();
     m_alertBox->raise();
@@ -181,10 +194,27 @@ void Tab1_camera::showPopup()
 
 void Tab1_camera::onDetected()
 {
-    if (m_badge) {
-        m_badge->show();
-        m_badge->raise();
-        QTimer::singleShot(3000, m_badge, [this]{ if (m_badge) m_badge->hide(); });
-    }
+    // 이미 경보 상태이면 아무것도 하지 않음 (중복 방지)
+    if (m_isAlertActive) return;
+
+    m_isAlertActive = true; // 경보 상태로 변경
+    if (m_badge) { m_badge->show(); m_badge->raise(); }
     showPopup();
+}
+// [추가] 팝업창을 내리는 로직
+void Tab1_camera::onDetectionCleared()
+{
+    if (!m_isAlertActive) return; // 경보 상태가 아니면 아무것도 안 함
+
+    m_isAlertActive = false; // 경보 상태 해제
+    if (m_badge) { m_badge->hide(); }
+    closePopup();
+}
+// [추가] 팝업을 닫는 함수
+void Tab1_camera::closePopup()
+{
+    if (m_alertBox) {
+        m_alertBox->close();
+        m_alertBox->deleteLater();
+    }
 }

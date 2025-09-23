@@ -17,6 +17,8 @@
 #include <QPixmap>
 #include <QImage>
 #include <opencv2/opencv.hpp>
+#include <QMap>     // QMap 사용을 위해 추가
+#include <QDate>    // QDate 사용을 위해 추가
 
 // 유틸
 static bool isVideoFile(const QString& fn) {
@@ -91,17 +93,62 @@ void Tab2_video::refreshGallery()
     ui->title->setText(QStringLiteral("영상 갤러리 — %1").arg(m_mediaDir));
 
     QDir dir(m_mediaDir);
-    const auto entries = dir.entryInfoList(QDir::Files | QDir::NoDotAndDotDot,
-                                           QDir::Time | QDir::Reversed);
+    //const auto entries = dir.entryInfoList(QDir::Files | QDir::NoDotAndDotDot,
+    //                                       QDir::Time | QDir::Reversed);
 
+    // [수정] 정렬 기준을 이름(Name)으로 변경하여 파일 이름순으로 가져옵니다.
+    const auto entries = dir.entryInfoList(QDir::Files | QDir::NoDotAndDotDot,
+                                           QDir::Name | QDir::Reversed);
+
+    // 1. 파일 목록을 날짜(QDate)를 키로 사용하는 QMap으로 그룹화합니다.
+    QMap<QDate, QList<QFileInfo>> groupedByDate;
     for (const QFileInfo& fi : entries) {
         if (!isVideoFile(fi.fileName())) continue;
 
-        auto *item = new QListWidgetItem();
-        item->setText(fi.fileName());
-        item->setToolTip(fi.absoluteFilePath());
-        item->setIcon( makeThumbFor(fi.absoluteFilePath()) );
-        ui->list->addItem(item);
+        // 파일 이름 형식 'detect_yyyyMMdd_HHmmss.mp4' 에서 날짜 추출
+        QStringList parts = fi.baseName().split('_');
+        if (parts.size() < 2) continue; // 형식이 맞지 않으면 건너뜀
+
+        QDate date = QDate::fromString(parts.at(1), "yyyyMMdd");
+        if (date.isValid()) {
+            // 해당 날짜의 목록에 현재 파일 정보를 추가합니다.
+            groupedByDate[date].append(fi);
+        }
+    }
+
+    // 2. 그룹화된 맵(Map)을 최신 날짜부터(역순) 순회합니다.
+    QMapIterator<QDate, QList<QFileInfo>> it(groupedByDate);
+    it.toBack(); // 반복자를 맨 뒤로 이동 (가장 최신 날짜)
+
+    while (it.hasPrevious()) {
+        it.previous();
+        const QDate& date = it.key();
+        const QList<QFileInfo>& filesOnDate = it.value();
+
+        // 3. 날짜가 바뀔 때마다 '날짜 헤더' 아이템을 먼저 추가합니다.
+        auto *headerItem = new QListWidgetItem();
+        // 예: "2025년 9월 22일 (월요일)" 형식으로 변환
+        headerItem->setText(date.toString("yyyy년 M월 d일 (dddd)"));
+
+        // 헤더는 선택할 수 없도록 설정
+        headerItem->setFlags(headerItem->flags() & ~Qt::ItemIsSelectable);
+
+        // 헤더 스타일링 (굵게, 큰 글씨, 배경색)
+        QFont font = headerItem->font();
+        font.setBold(true);
+        font.setPointSize(14);
+        headerItem->setFont(font);
+        headerItem->setBackground(QColor("#f0f0f0"));
+        ui->list->addItem(headerItem);
+
+        // 4. 해당 날짜에 속한 영상 파일들의 썸네일을 추가합니다.
+        for (const QFileInfo& fi : filesOnDate) {
+            auto *item = new QListWidgetItem();
+            item->setText(fi.fileName());
+            item->setToolTip(fi.absoluteFilePath());
+            item->setIcon(makeThumbFor(fi.absoluteFilePath()));
+            ui->list->addItem(item);
+        }
     }
 }
 
@@ -164,7 +211,8 @@ void Tab2_video::backToGallery()
 void Tab2_video::onDetected()
 {
     // 필요시 감지 팝업 구현 (생략 가능)
-    QMessageBox::information(this, QStringLiteral("알림"), QStringLiteral("감지"));
+    // 여러개 뜨는 팝업 일단 주석했습니다.
+    //QMessageBox::information(this, QStringLiteral("알림"), QStringLiteral("감지"));
 }
 
 void Tab2_video::centerAndRaise(QWidget *dlg)

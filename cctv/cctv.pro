@@ -1,4 +1,4 @@
-QT       += core gui widgets multimedia multimediawidgets
+QT       += core gui widgets multimedia multimediawidgets websockets
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -13,12 +13,14 @@ SOURCES += \
     main.cpp \
     mainwidget.cpp \
     motiondetector.cpp \
+    streamserver.cpp \
     tab1_camera.cpp \
     tab2_video.cpp
 
 HEADERS += \
     mainwidget.h \
     motiondetector.h \
+    streamserver.h \
     tab1_camera.h \
     tab2_video.h
 

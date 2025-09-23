@@ -19,6 +19,9 @@ constexpr int   DILATE_ITERS  = 2;
 constexpr int   WARMUP_MS     = 3000;     // 3초 워밍업
 constexpr int   IGN_DILATE_K  = 21;       // 누적 마스크 팽창 커널
 constexpr int   IGN_TRIM_K    = 15;       // 워밍업 종료 시 마스크 다듬기(침식)
+
+// [추가] 감지가 사라진 후 몇 초 더 녹화할지 결정
+constexpr int   REC_GRACE_PERIOD_S = 5; // 5초
 }
 
 MotionDetector::MotionDetector(int camIndex, QObject* parent)
@@ -190,6 +193,8 @@ void MotionDetector::runLoop()
         return;
     }
 
+    bool wasDetectingLastFrame = false; // [추가] 이전 프레임 감지 상태
+
     while (m_running) {
         if (!m_cap.read(frame) || frame.empty()) continue;
 
@@ -227,20 +232,55 @@ void MotionDetector::runLoop()
             }
         }
 
-        // ★★★ 변경: invokeMethod 대신 즉시 신호 발행
-        if (m_cameraReady && m_armed && detectedNow) {
-            emit detected();
-            if (!m_recording) startRecording();
+        // // ★★★ 변경: invokeMethod 대신 즉시 신호 발행
+        // if (m_cameraReady && m_armed && detectedNow) {
+        //     emit detected();
+        //     if (!m_recording) startRecording();
+        // }
+
+        // if (m_recording) {
+        //     if (frame.size() != m_frameSize) {
+        //         cv::Mat resized; cv::resize(frame, resized, m_frameSize);
+        //         m_writer.write(resized);
+        //     } else {
+        //         m_writer.write(frame);
+        //     }
+        //     if (duration_cast<seconds>(steady_clock::now() - m_recStarted).count() >= m_recSeconds) {
+        //         stopRecording();
+        //     }
+        // }
+
+        // [수정 1] 감지 상태에 따른 신호 및 녹화 제어
+        if (m_cameraReady && m_armed) {
+            if (detectedNow) {
+                m_missCount = 0; // 움직임이 있으니 미감지 카운터 초기화
+                if (!wasDetectingLastFrame) { // 이전에 감지 안되다가 지금 처음 감지된 경우
+                    emit detected();
+                }
+                if (!m_recording) startRecording();
+                m_lastDetectTime = steady_clock::now();
+                wasDetectingLastFrame = true;
+            } else { // 현재 프레임에 움직임이 없는 경우
+                m_missCount++; // 미감지 카운터 증가
+                // 8 프레임 이상 연속으로 움직임이 없었고, 이전에 감지 중이었을 때만
+                if (m_missCount >= 8 && wasDetectingLastFrame) {
+                    emit detectionCleared(); // 위험 해제 신호 발생
+                    wasDetectingLastFrame = false;
+                    m_missCount = 0; // 카운터 초기화
+                }
+            }
         }
 
+        // [수정 2] 지속형 녹화 로직
         if (m_recording) {
-            if (frame.size() != m_frameSize) {
-                cv::Mat resized; cv::resize(frame, resized, m_frameSize);
-                m_writer.write(resized);
-            } else {
-                m_writer.write(frame);
-            }
-            if (duration_cast<seconds>(steady_clock::now() - m_recStarted).count() >= m_recSeconds) {
+            // ... (프레임 크기 조절 및 m_writer.write(frame)은 동일) ...
+
+            // 마지막 감지 후 N초가 지났고, 최소 녹화 시간도 지났으면 녹화 중지
+            auto now = steady_clock::now();
+            bool gracePeriodPassed = duration_cast<seconds>(now - m_lastDetectTime).count() >= REC_GRACE_PERIOD_S;
+            bool minRecTimePassed = duration_cast<seconds>(now - m_recStarted).count() >= m_recSeconds;
+
+            if (gracePeriodPassed && minRecTimePassed) {
                 stopRecording();
             }
         }

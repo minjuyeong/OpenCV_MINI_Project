@@ -8,6 +8,7 @@
 #include <atomic>
 #include <opencv2/opencv.hpp>
 #include <chrono>
+#include <QFuture>
 
 class MotionDetector : public QObject
 {
@@ -18,12 +19,13 @@ public:
 
     // 설정
     void setOutputDirectory(const QString& dir);   // 기본: ~/Videos/cctv
-    void setRecordingSeconds(int sec);             // 기본: 8초
+    void setRecordingSeconds(int sec);             // 기본: 8초, 이제 최소 녹화 시간으로 사용됨
     void setCameraIndex(int idx);
 
 signals:
     void frameReady(const QImage& img);  // UI 표시용
     void detected();                     // 감지 신호(팝업 등)
+    void detectionCleared(); // [추가] 위험 해제 신호
     void errorOccured(const QString& msg);
 
 public slots:
@@ -46,7 +48,7 @@ private:
     // 구성/상태
     int                  m_camIndex = 0;
     QString              m_outDir;              // 저장 폴더
-    int                  m_recSeconds = 8;
+    int                  m_recSeconds = 8;      //최소 녹화 시간
 
     // 스레드/루프
     QThread              m_worker;
@@ -64,9 +66,13 @@ private:
     std::chrono::steady_clock::time_point m_tStart;
     cv::Mat                               m_ignoreMask; // 초기 장면 누적 마스크
 
+    std::chrono::steady_clock::time_point m_lastDetectTime; // [추가] 마지막 감지 시간
+
     // 타임스탬프
     std::chrono::steady_clock::time_point m_recStarted;
     // private:
+    int                  m_missCount = 0; //위험감지 팝업 노이즈 필터
+
     bool m_cameraReady = false;  // 첫 프레임 성공적으로 읽은 뒤 true
 
 };

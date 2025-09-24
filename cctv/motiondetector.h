@@ -1,4 +1,4 @@
-#ifndef MOTIONDETECTOR_H
+    #ifndef MOTIONDETECTOR_H
 #define MOTIONDETECTOR_H
 
 #include <QObject>
@@ -17,13 +17,23 @@ public:
     ~MotionDetector();
 
     // 설정
-    void setOutputDirectory(const QString& dir);   // 기본: ~/Videos/cctv
-    void setRecordingSeconds(int sec);             // 기본: 8초
+    void setOutputDirectory(const QString& dir);
+    void setRecordingSeconds(int sec);
     void setCameraIndex(int idx);
 
+    // 영상 처리 옵션 설정 함수
+    void setClaheEnabled(bool enabled);
+    void setClaheParams(double clipLimit, int gridWidth, int gridHeight);
+    void setMog2Params(int history, double varThreshold);
+    void setAutoClaheEnabled(bool enabled);
+    void setAutoClaheParams(int darknessThreshold, double maxClip);
+
 signals:
-    void frameReady(const QImage& img);  // UI 표시용
-    void detected();                     // 감지 신호(팝업 등)
+    // ✅ 이 줄을 수정하여 double 인자를 추가합니다.
+    void frameReady(const QImage& img, double clipLimit);
+
+    void detected();
+    void detectionCleared();
     void errorOccured(const QString& msg);
 
 public slots:
@@ -32,43 +42,41 @@ public slots:
 
 private:
     void runLoop();
-
-    // 카메라 열기 (V4L2 우선 + /dev/video* 자동 탐색)
     bool openBestCamera();
-
-    // 녹화 제어
     void startRecording();
     void stopRecording();
-
-    static QImage matToQImage(const cv::Mat& bgr);
+    QImage matToQImage(const cv::Mat& bgr);
 
 private:
-    // 구성/상태
-    int                  m_camIndex = 0;
-    QString              m_outDir;              // 저장 폴더
-    int                  m_recSeconds = 8;
-
-    // 스레드/루프
-    QThread              m_worker;
-    std::atomic_bool     m_running{false};
-
-    // OpenCV
-    cv::VideoCapture     m_cap;
-    cv::VideoWriter      m_writer;
-    bool                 m_recording = false;
-    double               m_fps = 30.0;
-    cv::Size             m_frameSize;
-
-    // 워밍업/무시 마스크
-    bool                                 m_armed = false;
+    // (이하 멤버 변수들은 기존 코드와 동일)
+    int               m_camIndex = 0;
+    QString           m_outDir;
+    int               m_recSeconds = 8;
+    QThread           m_worker;
+    std::atomic_bool  m_running{false};
+    cv::VideoCapture  m_cap;
+    cv::VideoWriter   m_writer;
+    bool              m_recording = false;
+    double            m_fps = 30.0;
+    cv::Size          m_frameSize;
+    bool m_cameraReady = false;
+    bool m_armed = false;
     std::chrono::steady_clock::time_point m_tStart;
-    cv::Mat                               m_ignoreMask; // 초기 장면 누적 마스크
-
-    // 타임스탬프
     std::chrono::steady_clock::time_point m_recStarted;
-    // private:
-    bool m_cameraReady = false;  // 첫 프레임 성공적으로 읽은 뒤 true
-
+    cv::Mat           m_ignoreMask;
+    bool m_motionInProgress = false;
+    std::chrono::steady_clock::time_point m_lastDetectTime;
+    int               m_missCount = 0;
+    bool m_useClahe = false;
+    bool m_autoClahe = false;
+    int  m_darknessThreshold = 80;
+    double m_claheMaxClip = 8.0;
+    double m_claheClipLimit = 2.0;
+    cv::Size m_claheGridSize = cv::Size(8, 8);
+    int m_mog2History = 500;
+    double m_mog2VarThreshold = 16.0;
 };
 
 #endif // MOTIONDETECTOR_H
+
+

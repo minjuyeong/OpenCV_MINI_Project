@@ -4,6 +4,9 @@
 #include <QWidget>
 #include <QPointer>
 #include <QIcon>
+#include <QFuture>
+#include <QtConcurrent>
+
 
 class QListWidgetItem;
 class QMediaPlayer;
@@ -22,6 +25,10 @@ public:
 
     void setMediaDirectory(const QString& dir);
     QString mediaDirectory() const { return m_mediaDir; }
+
+signals:
+    // [파일안정화] 썸네일 하나가 완성될 때마다 보낼 신호
+    void thumbnailReady(QListWidgetItem* item, const QIcon& icon);
 
 public slots:
     void refreshGallery();
@@ -42,6 +49,12 @@ private:
     QIcon makeThumbFor(const QString& filePath, QSize target = QSize(240, 135));
     void  setupVideoOutput();    // videoHost에 QVideoWidget 주입
     void  centerAndRaise(QWidget *dlg);
+    // [파일안정화] 백그라운드에서 썸네일을 로딩할 함수
+    void loadThumbnailsInBackground();
+    QFuture<void> m_thumbFuture; // 스레드 상태 관리를 위해 추가
+private slots:
+    // [파일안정화] 완성된 썸네일을 리스트 위젯에 적용할 슬롯
+    void onThumbnailReady(QListWidgetItem* item, const QIcon& icon);
 };
 
 #endif // TAB2_VIDEO_H

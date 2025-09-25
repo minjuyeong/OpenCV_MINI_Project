@@ -41,7 +41,7 @@
 
 ## 🛠️ 기술 스택 (Tech Stack)
 
-* **언어**: C++14
+* **언어**: C++
 * **프레임워크**: Qt 6 (Widgets, Concurrent, WebSockets, Multimedia)
 * **핵심 라이브러리**: OpenCV 4
 * **빌드 시스템**: qmake
